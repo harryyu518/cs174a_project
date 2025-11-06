@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { or } from 'three/webgpu';
 
 const scene = new THREE.Scene();
 
@@ -53,7 +54,7 @@ function rotationMatrixZ(theta) {
 	);
 }
 
-let planets = [];
+let planets = []; 
 let clock = new THREE.Clock();
 let attachedObject = null;
 let blendingFactor = 0.1;
@@ -69,35 +70,82 @@ function createPlanet(radius = 1, color = 0xff0000, segments = 32) {
   return planet;
 }
 
-const sun = createPlanet(1, 0xff0000); // Red sun
+const sun = new THREE.Mesh(
+  new THREE.SphereGeometry(1, 32, 32),
+  new THREE.MeshBasicMaterial({ color: 0xff0000 }), 
+);
 
 // TODO: Create sun light
-let sunLight = null;
+let sunLight = new THREE.PointLight(0xffffff, 1, 0, 1); // White light
+sunLight.position.set(0, 0, 0);
 
 // Create orbiting planets
 // TODO: Create Planet 1: Flat-shaded Light Gray Planet
-let planet1 = null;
+const p1Geom = new THREE.SphereGeometry(1, 10, 8);
+const p1Mat  = new THREE.MeshPhongMaterial({
+  color: 0x909090,
+  flatShading: true,     // flat shading per spec
+  shininess: 30,         // tweakable; Phong needs some shininess to show light
+  specular: 0x111111
+});
+const planet1 = new THREE.Mesh(p1Geom, p1Mat);
 
 // TODO: Create Planet 2: Turquoise with Dynamic Shading
-let planet2 = null;
+let planet2 = createPlanet(1, 0x40e0d0); // Turquoise planet
 
 // TODO: Create Planet 3: Copper Planet with Ring
-let planet3 = null;
+let planet3 = createPlanet(1, 0xB87333); // Copper planet
+
 // Planet 3 Ring
 let ring = null;
 
 // TODO: Create Planet 4: Soft Light Blue Planet
-let planet4 = null;
+let planet4 = createPlanet(1, 0xadd8e6); // Light blue planet
 
 // TODO: Create Planet 4's Moon
 let moon = null;
 
+// Add all the planets
+scene.add(planet1, planet2, planet3, planet4, sun, sunLight, moon, ring);
+
 // TODO: Store planets and moon in an array for easy access, 
 // e.g. { mesh: planet1, distance: 5, speed: 1.1 },
-planets = [
-    // TODO: Fill in the planet's data here
+// orbitspeed function
+function orbitspeed(distance) {
+    return 1 / distance;
+}
 
+planets = [
+  {
+    mesh: planet1,
+    name: "planet1",
+    distance: 7,
+    speed: orbitspeed(7),   
+    spin: 0
+  },
+  {
+    mesh: planet2,
+    name: "planet2",
+    distance: 10,
+    speed: orbitspeed(10),
+    spin: 0
+  },
+  {
+    mesh: planet3,
+    name: "planet3",
+    distance: 13,
+    speed: orbitspeed(13),
+    spin: 0
+  },
+  {
+    mesh: planet4,
+    name: "planet4",
+    distance: 16,
+    speed: orbitspeed(16),
+    spin: 0
+  }
 ];
+
 
 // Handle window resize
 window.addEventListener('resize', onWindowResize, false);
@@ -430,19 +478,25 @@ function animate() {
     sun.scale.set(sunRadius, sunRadius, sunRadius);
 
     // Color
-    sun.material.color.setRGB(1, progress, 0); // 1, 1, 0 is yellow; 1, 0, 0 is red
-    
+    sun.material.color.setRGB(1, progress, progress); // 1, 0, 0 → 1, 1, 1 (red to white)
+
     // TODO: Update sun light
+    sunLight.color.setRGB(1, progress, progress);
+    sunLight.power = Math.pow(10, sunRadius); // Adjust power based on radius
 
     // TODO: Loop through all the orbiting planets and apply transformation to create animation effect
     planets.forEach(function (obj, index) {
         let planet = obj.mesh
         let distance = obj.distance
-        let speed = obj.speed
+        let speed = obj.speed; 
         
         let model_transform = new THREE.Matrix4(); 
         
         // TODO: Implement the model transformations for the planets
+        let angle = time * speed;
+        let translation = translationMatrix(distance * Math.cos(angle), 0, distance * Math.sin(angle));
+        model_transform.multiply(translation);
+        
         // Hint: Some of the planets have the same set of transformation matrices, but for some you have to apply some additional transformation to make it work (e.g. planet4's moon, planet3's wobbling effect(optional)).
 
 
