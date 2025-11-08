@@ -88,10 +88,22 @@ const p1Mat  = new THREE.MeshPhongMaterial({
   shininess: 30,         // tweakable; Phong needs some shininess to show light
   specular: 0x111111
 });
+
 const planet1 = new THREE.Mesh(p1Geom, p1Mat);
 
 // TODO: Create Planet 2: Turquoise with Dynamic Shading
-let planet2 = createPlanet(1, 0x40e0d0); // Turquoise planet
+const p2Geom = new THREE.SphereGeometry(1, 12, 10);
+const p2Params = {
+  color: new THREE.Color(0x66FFF2),
+  ambient: 0.0,
+  diffusivity: 0.5,
+  specularity: 1.0,
+  smoothness: 40.0
+};
+const p2PhongMat   = createPhongMaterial(p2Params);
+const p2GouraudMat = createGouraudMaterial(p2Params);
+
+const planet2 = new THREE.Mesh(p2Geom, p2PhongMat);
 
 // TODO: Create Planet 3: Copper Planet with Ring
 let planet3 = createPlanet(1, 0xB87333); // Copper planet
@@ -166,12 +178,73 @@ function createGouraudMaterial(materialProperties) {
         shape_color_representation.b,
         1.0
     ); 
+
     // TODO: Implement the Vertex Shader in GLSL
-    let vertexShader = ``;
+    let vertexShader = `
+    precision mediump float;
+    const int N_LIGHTS = ${numLights};
+
+    uniform float ambient, diffusivity, specularity, smoothness;
+    uniform vec4  light_positions_or_vectors[N_LIGHTS];
+    uniform vec4  light_colors[N_LIGHTS];
+    uniform float light_attenuation_factors[N_LIGHTS];
+    uniform vec4  shape_color;
+    uniform vec3  squared_scale;
+    uniform vec3  camera_center;
+
+    uniform mat4 model_transform;
+    uniform mat4 projection_camera_model_transform;
+
+    // Gouraud: pass lit color to the fragment shader
+    varying vec4 vColor;
+
+    void main() {
+        // World-space position & normal
+        vec3 N = normalize(mat3(model_transform) * normal / squared_scale);
+        vec3 worldPos = (model_transform * vec4(position, 1.0)).xyz;
+        vec3 E = normalize(camera_center - worldPos);
+
+        // Start with ambient
+        vec3 accum = shape_color.rgb * ambient;
+
+        // Light loop (mirror your Phong uniform semantics)
+        for (int i = 0; i < N_LIGHTS; ++i) {
+        vec3 Lvec = light_positions_or_vectors[i].xyz
+                    - light_positions_or_vectors[i].w * worldPos;
+        float dist = length(Lvec);
+        vec3 L = (dist > 0.0) ? (Lvec / dist) : vec3(0.0);
+
+        // Use reflection vector like your Phong ref
+        vec3 R = reflect(-L, N);
+
+        float diff = max(dot(N, L), 0.0);
+        float spec = (diff > 0.0) ? pow(max(dot(R, E), 0.0), smoothness) : 0.0;
+
+        float att = 1.0 / (1.0 + light_attenuation_factors[i] * dist * dist);
+
+        vec3 contrib =
+            shape_color.rgb * light_colors[i].rgb * diffusivity * diff +
+            light_colors[i].rgb * specularity * spec;
+
+        accum += att * contrib;
+        }
+
+        vColor = vec4(accum, shape_color.a);
+
+        // Final clip-space position
+        gl_Position = projection_camera_model_transform * vec4(position, 1.0);
+    }
+    `;
 
     // TODO: Implement the Fragment Shader in GLSL
-    let fragmentShader = ``;
-    
+    let fragmentShader = `
+    precision mediump float;
+    varying vec4 vColor;
+    void main() {
+        gl_FragColor = vColor;  // interpolated per-fragment color
+    }
+    `;    
+
     // Uniforms
     const uniforms = {
         ambient: { value: materialProperties.ambient },
@@ -248,7 +321,7 @@ function createPhongMaterial(materialProperties) {
                 result += attenuation * light_contribution;
             }
             return result;
-        }
+        }\
 
         uniform mat4 model_transform;
         uniform mat4 projection_camera_model_transform;
@@ -482,7 +555,7 @@ function animate() {
 
     // TODO: Update sun light
     sunLight.color.setRGB(1, progress, progress);
-    sunLight.power = Math.pow(10, sunRadius); // Adjust power based on radius
+    sunLight.intensity = Math.pow(10, sunRadius); // Adjust power based on radius
 
     // TODO: Loop through all the orbiting planets and apply transformation to create animation effect
     planets.forEach(function (obj, index) {
@@ -498,7 +571,6 @@ function animate() {
         model_transform.multiply(translation);
         
         // Hint: Some of the planets have the same set of transformation matrices, but for some you have to apply some additional transformation to make it work (e.g. planet4's moon, planet3's wobbling effect(optional)).
-
 
         planet.matrix.copy(model_transform);
         planet.matrixAutoUpdate = false;
@@ -538,7 +610,16 @@ function animate() {
     });
     
     // TODO: Apply Gouraud/Phong shading alternatively to Planet 2
-    
+    const even = (Math.floor(time) % 2) === 0;
+    const nextMat = even ? p2PhongMat : p2GouraudMat;
+
+    if (planet2.material !== nextMat) {
+    planet2.material = nextMat;
+    planet2.material.needsUpdate = true;
+    }
+
+    // Update custom shader uniforms so lighting works
+    updatePlanetMaterialUniforms(planet2);
 
     // TODO: Update customized planet material uniforms
     // e.g. updatePlanetMaterialUniforms(planets[1].mesh);
