@@ -58,21 +58,15 @@ let planets = [];
 let clock = new THREE.Clock();
 let attachedObject = null;
 let blendingFactor = 0.1;
+
 // Create additional variables as needed here
+const defaultCamPos = new THREE.Vector3(0, 10, 20);  
+document.addEventListener('keydown', onKeyDown);
 
 // TODO: Create the sun
-// Helper function to create a planet
-function createPlanet(radius = 1, color = 0xff0000, segments = 32) {
-  const geometry = new THREE.SphereGeometry(radius, segments, segments);
-  const material = new THREE.MeshBasicMaterial({ color });
-  const planet = new THREE.Mesh(geometry, material);
-  scene.add(planet);
-  return planet;
-}
-
 const sun = new THREE.Mesh(
-  new THREE.SphereGeometry(1, 32, 32),
-  new THREE.MeshBasicMaterial({ color: 0xff0000 }), 
+    new THREE.SphereGeometry(1, 32, 32),
+    new THREE.MeshBasicMaterial({ color: 0xff0000 }), 
 );
 
 // TODO: Create sun light
@@ -83,10 +77,10 @@ sunLight.position.set(0, 0, 0);
 // TODO: Create Planet 1: Flat-shaded Light Gray Planet
 const p1Geom = new THREE.SphereGeometry(1, 10, 8);
 const p1Mat  = new THREE.MeshPhongMaterial({
-  color: 0x909090,
-  flatShading: true,     // flat shading per spec
-  shininess: 30,         // tweakable; Phong needs some shininess to show light
-  specular: 0x111111
+    color: 0x909090,
+    flatShading: true,     
+    shininess: 30,         
+    specular: 0x111111
 });
 
 const planet1 = new THREE.Mesh(p1Geom, p1Mat);
@@ -94,70 +88,65 @@ const planet1 = new THREE.Mesh(p1Geom, p1Mat);
 // TODO: Create Planet 2: Turquoise with Dynamic Shading
 const p2Geom = new THREE.SphereGeometry(1, 12, 10);
 const p2Params = {
-  color: new THREE.Color(0x66FFF2),
-  ambient: 0.0,
-  diffusivity: 0.5,
-  specularity: 1.0,
-  smoothness: 40.0
+    color: new THREE.Color(0x66FFF2),
+    ambient: 0.0,
+    diffusivity: 0.5,
+    specularity: 1.0,
+    smoothness: 40.0
 };
 const p2PhongMat   = createPhongMaterial(p2Params);
 const p2GouraudMat = createGouraudMaterial(p2Params);
-
 const planet2 = new THREE.Mesh(p2Geom, p2PhongMat);
 
 // TODO: Create Planet 3: Copper Planet with Ring
-let planet3 = createPlanet(1, 0xB87333); // Copper planet
+const p3Params = {
+    color: new THREE.Color(0xC97A33), 
+    ambient: 0.0,
+    diffusivity: 1.0,
+    specularity: 1.0,
+    smoothness: 100.0
+ };
+const p3Geom = new THREE.SphereGeometry(1, 16, 16);
+const planet3 = new THREE.Mesh(p3Geom, createPhongMaterial(p3Params));
 
 // Planet 3 Ring
-let ring = null;
+const ringGeom = new THREE.RingGeometry(1.5, 2.5, 128);
+const ringMat  = createRingMaterial({ color: new THREE.Color(0xC79B6D) });
+const ring = new THREE.Mesh(ringGeom, ringMat);
+ring.rotation.set(THREE.MathUtils.degToRad(60), 0, THREE.MathUtils.degToRad(35));
+planet3.add(ring);
 
 // TODO: Create Planet 4: Soft Light Blue Planet
-let planet4 = createPlanet(1, 0xadd8e6); // Light blue planet
+const p4Geom = new THREE.SphereGeometry(1, 20, 18);
+const p4Params = {
+    color: new THREE.Color(0x2A7FFF),
+    ambient: 0.0,
+    diffusivity: 1.0,
+    specularity: 1.0,
+    smoothness: 100.0
+};
+let planet4 = new THREE.Mesh(p4Geom, createPhongMaterial(p4Params));
 
 // TODO: Create Planet 4's Moon
-let moon = null;
+const p4MoonGeom = new THREE.SphereGeometry(1, 4, 2);
+const p4MoonMat  = new THREE.MeshPhongMaterial({
+    color: new THREE.Color(0xC83CB9),
+    flatShading: true
+});
+let p4Moon = new THREE.Mesh(p4MoonGeom, p4MoonMat);
+planet4.add(p4Moon);
 
 // Add all the planets
-scene.add(planet1, planet2, planet3, planet4, sun, sunLight, moon, ring);
+scene.add(planet1, planet2, planet3, planet4, sun, sunLight);
 
 // TODO: Store planets and moon in an array for easy access, 
 // e.g. { mesh: planet1, distance: 5, speed: 1.1 },
-// orbitspeed function
-function orbitspeed(distance) {
-    return 1 / distance;
-}
-
 planets = [
-  {
-    mesh: planet1,
-    name: "planet1",
-    distance: 7,
-    speed: orbitspeed(7),   
-    spin: 0
-  },
-  {
-    mesh: planet2,
-    name: "planet2",
-    distance: 10,
-    speed: orbitspeed(10),
-    spin: 0
-  },
-  {
-    mesh: planet3,
-    name: "planet3",
-    distance: 13,
-    speed: orbitspeed(13),
-    spin: 0
-  },
-  {
-    mesh: planet4,
-    name: "planet4",
-    distance: 16,
-    speed: orbitspeed(16),
-    spin: 0
-  }
+  { mesh: planet1, name: "planet1", distance: 7, speed: 1.1, spin: 0},
+  { mesh: planet2, name: "planet2", distance: 10, speed: 5/8, spin: 0},
+  { mesh: planet3, name: "planet3", distance: 13, speed: 5/11, spin: 1},
+  { mesh: planet4, name: "planet4", distance: 16, speed: 5/14, spin: 0}
 ];
-
 
 // Handle window resize
 window.addEventListener('resize', onWindowResize, false);
@@ -273,7 +262,7 @@ function createGouraudMaterial(materialProperties) {
 function createPhongMaterial(materialProperties) {
     const numLights = 1;
     
-    // convert shape_color1 to a Vector4
+    // Convert shape_color1 to a Vector4
     let shape_color_representation = new THREE.Color(materialProperties.color);
     let shape_color = new THREE.Vector4(
         shape_color_representation.r,
@@ -380,6 +369,7 @@ function createPhongMaterial(materialProperties) {
             gl_FragColor = color;
         }
     `;
+
     // Prepare uniforms
     const uniforms = {
         ambient: { value: materialProperties.ambient },
@@ -416,18 +406,42 @@ function createRingMaterial(materialProperties) {
 
     // TODO: Finish the fragment shader to create the brightness variation with sinine finction
     let fragmentShader = `
+        precision mediump float;
         uniform vec3 color;
         varying vec3 vPosition;
 
-        void main() {
+        // Returns 1.0 if r is in [a,b], else 0.0
+        float ringBand(float r, float a, float b) {
+            return step(a, r) * (1.0 - step(b, r));
+        }
 
+        void main() {
+            float r = length(vPosition.xy);
+
+            // Four non-overlapping bands
+            float m = 0.0;
+            m += ringBand(r, 1.5, 1.60);
+            m += ringBand(r, 1.68, 1.78);
+            m += ringBand(r, 1.86, 1.96);
+            m += ringBand(r, 2.04, 2.14);
+
+            // Fully transparent outside the bands
+            if (m < 0.5) discard;
+
+            gl_FragColor = vec4(color, 1.0);
         }
     `;
 
-    // TODO: Fill in the values to be passed in to create the custom shader
     return new THREE.ShaderMaterial({
-        uniforms: {color: null},
-
+        uniforms: {
+            color: { value: materialProperties.color }
+        },
+        vertexShader,
+        fragmentShader,
+        side: THREE.DoubleSide,   
+        transparent: true,        
+        depthTest: true,
+        depthWrite: false         
     });
 }
 
@@ -520,21 +534,22 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-
 // TODO: Implement the camera attachment given the key being pressed
 // Hint: This step you only need to determine the object that are attached to and assign it to a variable you have to store the attached object.
-function onKeyDown(event) {
-    switch (event.keyCode) {
-        case 48: // '0' key - Detach camera
-            break;
-        
-        //...
-    }
+function onKeyDown(e) {
+  switch (e.key) {
+    case '1': attachedObject = 0; break;       // Planet 1
+    case '2': attachedObject = 1; break;       // Planet 2
+    case '3': attachedObject = 2; break;       // Planet 3
+    case '4': attachedObject = 3; break;       // Planet 4
+    case '5': attachedObject = 'moon'; break;  // Planet 4's Moon
+    case '0': attachedObject = null; break;    // Detach
+    default: return;
+  }
 }
 
 function animate() {
     requestAnimationFrame(animate);
-
     let time = clock.getElapsedTime();
 
     // TODO: Animate sun radius and color
@@ -555,7 +570,7 @@ function animate() {
 
     // TODO: Update sun light
     sunLight.color.setRGB(1, progress, progress);
-    sunLight.intensity = Math.pow(10, sunRadius); // Adjust power based on radius
+    sunLight.power = Math.pow(10, sunRadius); // Adjust power based on radius
 
     // TODO: Loop through all the orbiting planets and apply transformation to create animation effect
     planets.forEach(function (obj, index) {
@@ -571,10 +586,30 @@ function animate() {
         model_transform.multiply(translation);
         
         // Hint: Some of the planets have the same set of transformation matrices, but for some you have to apply some additional transformation to make it work (e.g. planet4's moon, planet3's wobbling effect(optional)).
-
         planet.matrix.copy(model_transform);
         planet.matrixAutoUpdate = false;
-        
+
+        // Special handling: Planet 4's moon
+        if (obj.name === "planet4" && planet.children && planet.children.length > 0) {
+            // Moon orbits at radius 2.5 with angular speed 1.5 rad/s
+            const moonSpeed = 1.5;
+            const moonAngle = time * moonSpeed;
+
+            // Local transform = rotate around Y, then translate out on X, then scale smaller
+            const moonRot  = rotationMatrixY(moonAngle);
+            const moonTrans = translationMatrix(2.5, 0, 0);
+            const moonScale = new THREE.Matrix4().makeScale(0.35, 0.35, 0.35);
+
+            const moonLocal = new THREE.Matrix4();
+            moonLocal.multiply(moonRot);
+            moonLocal.multiply(moonTrans);
+            moonLocal.multiply(moonScale);
+
+            const moonMesh = planet.children[planet.children.length - 1]; // p4Moon
+            moonMesh.matrix.copy(moonLocal);
+            moonMesh.matrixAutoUpdate = false;
+        }
+
         // Camera attachment logic here, when certain planet is being attached, we want the camera to be following the planet by having the same transformation as the planet itself. No need to make changes.
         if (attachedObject === index){
             let cameraTransform = new THREE.Matrix4();
@@ -601,10 +636,44 @@ function animate() {
         } 
 
         // TODO: If camera is detached, slowly lerp the camera back to the original position and look at the origin
+        else if (attachedObject === 'moon' && obj.name === 'planet4') {
+            // Recompute the moon's local transform
+            const moonSpeed = 1.5;
+            const moonAngle = time * moonSpeed;
+
+            const moonRot   = rotationMatrixY(moonAngle);
+            const moonTrans = translationMatrix(2.5, 0, 0);
+            const moonScale = new THREE.Matrix4().makeScale(0.35, 0.35, 0.35);
+
+            // Local moon matrix: R * T * S
+            const moonLocal = new THREE.Matrix4()
+                .multiply(moonRot)
+                .multiply(moonTrans)
+                .multiply(moonScale);
+
+            // World matrix for the moon = planet4.model * moonLocal
+            const moonWorld = new THREE.Matrix4().copy(model_transform).multiply(moonLocal);
+
+            // Put camera 10 units "ahead" of the moon
+            const offset = translationMatrix(0, 0, 10);
+            moonWorld.multiply(offset);
+
+            const desired = new THREE.Vector3();
+            desired.setFromMatrixPosition(moonWorld);
+            camera.position.lerp(desired, blendingFactor);
+
+            // Look at the moon's world position without the offset
+            const moonLookAt = new THREE.Vector3();
+            moonLookAt.setFromMatrixPosition(new THREE.Matrix4().copy(model_transform).multiply(moonLocal));
+            camera.lookAt(moonLookAt);
+
+            controls.enabled = false;
+        }
+
         else if (attachedObject === null) {
-
-
-            // Enable controls
+            // Smoothly go back to default position and look at origin
+            camera.position.lerp(defaultCamPos, blendingFactor);
+            camera.lookAt(0, 0, 0);
             controls.enabled = true;
         }
     });
@@ -614,16 +683,18 @@ function animate() {
     const nextMat = even ? p2PhongMat : p2GouraudMat;
 
     if (planet2.material !== nextMat) {
-    planet2.material = nextMat;
-    planet2.material.needsUpdate = true;
+        planet2.material = nextMat;
+        planet2.material.needsUpdate = true;
     }
 
     // Update custom shader uniforms so lighting works
-    updatePlanetMaterialUniforms(planet2);
-
     // TODO: Update customized planet material uniforms
     // e.g. updatePlanetMaterialUniforms(planets[1].mesh);
-    
+    planets.forEach(obj => {
+        if (obj.mesh.material.isShaderMaterial) {
+            updatePlanetMaterialUniforms(obj.mesh);
+        }
+    });
 
     // Update controls only when the camera is not attached
     if (controls.enabled) {
