@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { or } from 'three/webgpu';
 
 const scene = new THREE.Scene();
 
@@ -61,7 +60,6 @@ let blendingFactor = 0.1;
 
 // Create additional variables as needed here
 const defaultCamPos = new THREE.Vector3(0, 10, 20);  
-document.addEventListener('keydown', onKeyDown);
 
 // TODO: Create the sun
 const sun = new THREE.Mesh(
@@ -110,7 +108,7 @@ const p3Geom = new THREE.SphereGeometry(1, 16, 16);
 const planet3 = new THREE.Mesh(p3Geom, createPhongMaterial(p3Params));
 
 // Planet 3 Ring
-const ringGeom = new THREE.RingGeometry(1.5, 2.5, 128);
+const ringGeom = new THREE.RingGeometry(1.5, 2.5, 64);
 const ringMat  = createRingMaterial({ color: new THREE.Color(0xC79B6D) });
 const ring = new THREE.Mesh(ringGeom, ringMat);
 ring.rotation.set(THREE.MathUtils.degToRad(60), 0, THREE.MathUtils.degToRad(35));
@@ -142,10 +140,10 @@ scene.add(planet1, planet2, planet3, planet4, sun, sunLight);
 // TODO: Store planets and moon in an array for easy access, 
 // e.g. { mesh: planet1, distance: 5, speed: 1.1 },
 planets = [
-  { mesh: planet1, name: "planet1", distance: 7, speed: 1.1, spin: 0},
-  { mesh: planet2, name: "planet2", distance: 10, speed: 5/8, spin: 0},
-  { mesh: planet3, name: "planet3", distance: 13, speed: 5/11, spin: 1},
-  { mesh: planet4, name: "planet4", distance: 16, speed: 5/14, spin: 0}
+  { mesh: planet1, name: "planet1", distance: 7, speed: 1.1},
+  { mesh: planet2, name: "planet2", distance: 10, speed: 5/8},
+  { mesh: planet3, name: "planet3", distance: 13, speed: 5/11},
+  { mesh: planet4, name: "planet4", distance: 16, speed: 5/14}
 ];
 
 // Handle window resize
@@ -230,7 +228,7 @@ function createGouraudMaterial(materialProperties) {
     precision mediump float;
     varying vec4 vColor;
     void main() {
-        gl_FragColor = vColor;  // interpolated per-fragment color
+        gl_FragColor = vColor;
     }
     `;    
 
@@ -310,7 +308,7 @@ function createPhongMaterial(materialProperties) {
                 result += attenuation * light_contribution;
             }
             return result;
-        }\
+        }
 
         uniform mat4 model_transform;
         uniform mat4 projection_camera_model_transform;
@@ -410,27 +408,28 @@ function createRingMaterial(materialProperties) {
         uniform vec3 color;
         varying vec3 vPosition;
 
-        // Returns 1.0 if r is in [a,b], else 0.0
-        float ringBand(float r, float a, float b) {
-            return step(a, r) * (1.0 - step(b, r));
-        }
-
         void main() {
+            // Radial distance in the ring plane
             float r = length(vPosition.xy);
 
-            // Four non-overlapping bands
-            float m = 0.0;
-            m += ringBand(r, 1.5, 1.60);
-            m += ringBand(r, 1.68, 1.78);
-            m += ringBand(r, 1.86, 1.96);
-            m += ringBand(r, 2.04, 2.14);
+            // Soft mask for the ring body (inner=1.5, outer=2.5)
+            float inner = 1.5;
+            float outer = 2.5;
+            float body  = step(inner, r) * (1.0 - step(outer, r));
+            if (body < 0.5) discard;
 
-            // Fully transparent outside the bands
-            if (m < 0.5) discard;
+            // Sinusoidal modulation across radius
+            float frequency = 4.0;
+            float t = (r - inner) / (outer - inner); 
+            float wave = 0.5 + 0.5 * sin(6.2831853 * frequency * t);
 
-            gl_FragColor = vec4(color, 1.0);
+            // Sharpen contrast a bit
+            float brightness = pow(wave, 1.2);
+
+            gl_FragColor = vec4(color * brightness, 1.0);
         }
     `;
+
 
     return new THREE.ShaderMaterial({
         uniforms: {
@@ -537,15 +536,15 @@ function onWindowResize() {
 // TODO: Implement the camera attachment given the key being pressed
 // Hint: This step you only need to determine the object that are attached to and assign it to a variable you have to store the attached object.
 function onKeyDown(e) {
-  switch (e.key) {
-    case '1': attachedObject = 0; break;       // Planet 1
-    case '2': attachedObject = 1; break;       // Planet 2
-    case '3': attachedObject = 2; break;       // Planet 3
-    case '4': attachedObject = 3; break;       // Planet 4
-    case '5': attachedObject = 'moon'; break;  // Planet 4's Moon
-    case '0': attachedObject = null; break;    // Detach
-    default: return;
-  }
+    switch (e.key) {
+        case '1': attachedObject = 0; break;       // Planet 1
+        case '2': attachedObject = 1; break;       // Planet 2
+        case '3': attachedObject = 2; break;       // Planet 3
+        case '4': attachedObject = 3; break;       // Planet 4
+        case '5': attachedObject = 'moon'; break;  // Planet 4's Moon
+        case '0': attachedObject = null; break;    // Detach
+        default: return;
+    }
 }
 
 function animate() {
@@ -557,12 +556,13 @@ function animate() {
     const period = 10.0;
     const phase = period10 / period;
 
-    // linear triangle wave in [0,1]: 0→1→0
+    // Linear triangle wave in [0,1]: 0→1→0
     const progress = 1 - Math.abs(2 * phase - 1);
 
-    // map progress [0,1] to radius [1,3]
+    // Map progress [0,1] to radius [1,3]
     const sunRadius = 1 + 2 * progress;
-    
+
+    // Sun scale
     sun.scale.set(sunRadius, sunRadius, sunRadius);
 
     // Color
@@ -584,7 +584,7 @@ function animate() {
         let angle = time * speed;
         let translation = translationMatrix(distance * Math.cos(angle), 0, distance * Math.sin(angle));
         model_transform.multiply(translation);
-        
+
         // Hint: Some of the planets have the same set of transformation matrices, but for some you have to apply some additional transformation to make it work (e.g. planet4's moon, planet3's wobbling effect(optional)).
         planet.matrix.copy(model_transform);
         planet.matrixAutoUpdate = false;

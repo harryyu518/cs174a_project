@@ -18,5 +18,13 @@
   "directories": {
     "doc": "docs"
   },
-  "type": "commonjs"
+  "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harryyu518/cs174a_assignment_3.git"
+  },
+  "bugs": {
+    "url": "https://github.com/harryyu518/cs174a_assignment_3/issues"
+  },
+  "homepage": "https://github.com/harryyu518/cs174a_assignment_3#readme"
 }
