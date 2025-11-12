@@ -1,0 +1,41 @@
+# Node / package managers
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+.pnpm-debug.log*
+
+# Build output
+dist/
+build/
+out/
+.cache/
+.tmp/
+
+# Tools
+.DS_Store
+.vscode/
+.idea/
+*.log
+
+# Environment / secrets
+.env
+.env.*.local
+
+# Static site generators / bundlers (choose what you use)
+.next/
+.vercel/
+.svelte-kit/
+.storybook/
+coverage/
+
+# Docs site builds (if you publish to /docs, keep it, otherwise ignore)
+# docs/
+
+# TypeScript
+*.tsbuildinfo
+
+# Misc
+*.swp
