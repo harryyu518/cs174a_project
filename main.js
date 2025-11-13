@@ -84,10 +84,44 @@ window.addEventListener('keyup', (e) => {
 });
 
 // ======================= LIGHTS ===========================
-scene.add(new THREE.HemisphereLight(0x88aaff, 0x223344, 0.9));
-const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-dir.position.set(5, 10, 6);
-scene.add(dir);
+// Realistic sunlight
+const sunLight = new THREE.DirectionalLight(0xfffbf0, 1.2);
+sunLight.position.set(50, 40, 30);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.width = 4096;
+sunLight.shadow.mapSize.height = 4096;
+sunLight.shadow.camera.far = 200;
+sunLight.shadow.camera.left = -100;
+sunLight.shadow.camera.right = 100;
+sunLight.shadow.camera.top = 100;
+sunLight.shadow.camera.bottom = -100;
+scene.add(sunLight);
+
+// Sky ambient light (simulate sky reflection)
+const skyLight = new THREE.HemisphereLight(0x87ceeb, 0x8b7355, 0.6);
+scene.add(skyLight);
+
+// Create the Sun sphere
+const sunGeometry = new THREE.SphereGeometry(3, 32, 32);
+const sunMaterial = new THREE.MeshBasicMaterial({
+  color: 0xfdb813,
+  toneMapped: false
+});
+const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+sun.position.copy(sunLight.position);
+scene.add(sun);
+
+// Add a glowing effect around the sun
+const glowGeometry = new THREE.SphereGeometry(3.5, 32, 32);
+const glowMaterial = new THREE.MeshBasicMaterial({
+  color: 0xffa500,
+  transparent: true,
+  opacity: 0.2,
+  toneMapped: false
+});
+const sunGlow = new THREE.Mesh(glowGeometry, glowMaterial);
+sunGlow.position.copy(sunLight.position);
+scene.add(sunGlow);
 
 // ======================= GRID ===========================
 const grid = new THREE.GridHelper(40, 40, 0x335577, 0x223344);
