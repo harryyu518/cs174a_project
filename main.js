@@ -156,16 +156,34 @@ function makeBird() {
     color: 0xcccccc, roughness: 0.7, metalness: 0.05, flatShading: true
   });
 
+  // --- LEFT WING ---
+  const leftWingPivot = new THREE.Object3D();
   const leftWing = new THREE.Mesh(wingGeom, wingMat);
+
+  // Move geometry so the pivot (0,0,0) sits at the wing's base
+  leftWing.position.x = -1.0; // shift wing back toward the body
   leftWing.rotation.x = Math.PI / 2;
-  leftWing.position.set(-1.1, 0.07, -0.5);
 
+  leftWingPivot.add(leftWing);
+  leftWingPivot.position.set(-0.1, 0.07, -0.5); // attach near body
+  bird.add(leftWingPivot);
+
+  // --- RIGHT WING ---
+  const rightWingPivot = new THREE.Object3D();
   const rightWing = new THREE.Mesh(wingGeom, wingMat);
-  rightWing.scale.x = -1;
-  rightWing.rotation.x = Math.PI / 2;
-  rightWing.position.set(1.1, 0.07, -0.5);
 
-  bird.add(leftWing, rightWing);
+  rightWing.scale.x = -1; // mirror geometry
+  rightWing.position.x = 1.0;
+  rightWing.rotation.x = Math.PI / 2;
+
+  rightWingPivot.add(rightWing);
+  rightWingPivot.position.set(0.1, 0.07, -0.5);
+  bird.add(rightWingPivot);
+
+  // Store pivots for animation
+  bird.userData.leftWingPivot = leftWingPivot;
+  bird.userData.rightWingPivot = rightWingPivot;
+
 
   // Tail
   const tailShape = new THREE.Shape();
@@ -187,18 +205,245 @@ function makeBird() {
   return bird;
 }
 
-// ======================= FLOCK ===========================
+// ======================= FLOCK (Boids) ===========================
+const NUM_BIRDS = 20; // change to 1..N as desired
 const flock = new THREE.Group();
 scene.add(flock);
 
 const birds = [];
 
-for (let i = 0; i < 1; i++) {
-  const bird = makeBird();
-  bird.position.set(0, 0, 0);
-  flock.add(bird);
-  birds.push(bird);
+// Boid parameters (tweak these for different flock behaviour)
+const BOID = {
+  maxSpeed: 4.0,
+  maxForce: 0.08,
+  neighborRadius: 2.5,
+  separationRadius: 0.7,
+  alignmentWeight: 1.0,
+  cohesionWeight: 0.9,
+  separationWeight: 1.8,
+  bounds: {
+    mode: 'wrap', // 'wrap' or 'bounce' or 'none'
+    size: 30
+  }
+};
+
+// create birds and assign initial velocity/acceleration
+for (let i = 0; i < NUM_BIRDS; i++) {
+  const b = makeBird();
+  // random spawn area
+  b.position.set(
+    (Math.random() - 0.5) * 10,
+    Math.random() * 3 + 0.2,
+    (Math.random() - 0.5) * 10
+  );
+
+  // initial small random velocity
+  const v = new THREE.Vector3(
+    (Math.random() - 0.5) * 0.6,
+    (Math.random() - 0.2) * 0.4,
+    (Math.random() - 0.5) * 0.6
+  );
+
+  b.userData.velocity = v;
+  b.userData.acceleration = new THREE.Vector3();
+  b.userData.maxSpeed = BOID.maxSpeed;
+  b.userData.maxForce = BOID.maxForce;
+
+  // optionally tag sub-parts for animation (wings)
+  // we expect wing meshes are the 4th/5th children (leftWing,rightWing) from makeBird
+  b.userData.leftWing = b.children.find((c) => c.name && c.name.includes('leftWing')) || null;
+  b.userData.rightWing = b.children.find((c) => c.name && c.name.includes('rightWing')) || null;
+
+  flock.add(b);
+  birds.push(b);
 }
+
+// Helper vectors reused to avoid allocations
+const steerVec = new THREE.Vector3();
+const tempVec1 = new THREE.Vector3();
+const tempVec2 = new THREE.Vector3();
+const tempVec3 = new THREE.Vector3();
+const upVec = new THREE.Vector3(0, 1, 0);
+
+// Compute steering force to limit vector length to max
+function limitVector(v, max) {
+  const l = v.length();
+  if (l > max) v.multiplyScalar(max / l);
+}
+
+// Boid rule implementations
+function separation(index) {
+  const self = birds[index];
+  const pos = self.position;
+  const desiredSeparation = BOID.separationRadius;
+
+  const steer = new THREE.Vector3();
+  let count = 0;
+
+  for (let i = 0; i < birds.length; i++) {
+    if (i === index) continue;
+    const other = birds[i];
+    const d = pos.distanceTo(other.position);
+    if (d > 0 && d < desiredSeparation) {
+      tempVec1.subVectors(pos, other.position).normalize().divideScalar(d); // stronger when closer
+      steer.add(tempVec1);
+      count++;
+    }
+  }
+
+  if (count > 0) {
+    steer.divideScalar(count);
+  }
+
+  if (steer.lengthSq() > 0) {
+    steer.setLength(self.userData.maxSpeed);
+    steer.sub(self.userData.velocity);
+    limitVector(steer, self.userData.maxForce);
+  }
+
+  return steer;
+}
+
+function alignment(index) {
+  const self = birds[index];
+  const pos = self.position;
+  const neighDist = BOID.neighborRadius;
+
+  const sum = new THREE.Vector3();
+  let count = 0;
+  for (let i = 0; i < birds.length; i++) {
+    if (i === index) continue;
+    const other = birds[i];
+    const d = pos.distanceTo(other.position);
+    if (d > 0 && d < neighDist) {
+      sum.add(other.userData.velocity);
+      count++;
+    }
+  }
+
+  if (count > 0) {
+    sum.divideScalar(count);
+    sum.setLength(self.userData.maxSpeed);
+    sum.sub(self.userData.velocity);
+    limitVector(sum, self.userData.maxForce);
+    return sum;
+  }
+
+  return new THREE.Vector3();
+}
+
+function cohesion(index) {
+  const self = birds[index];
+  const pos = self.position;
+  const neighDist = BOID.neighborRadius;
+
+  const center = new THREE.Vector3();
+  let count = 0;
+  for (let i = 0; i < birds.length; i++) {
+    if (i === index) continue;
+    const other = birds[i];
+    const d = pos.distanceTo(other.position);
+    if (d > 0 && d < neighDist) {
+      center.add(other.position);
+      count++;
+    }
+  }
+
+  if (count > 0) {
+    center.divideScalar(count);
+    // seek towards center
+    tempVec1.subVectors(center, pos);
+    tempVec1.setLength(self.userData.maxSpeed);
+    tempVec1.sub(self.userData.velocity);
+    limitVector(tempVec1, self.userData.maxForce);
+    return tempVec1;
+  }
+
+  return new THREE.Vector3();
+}
+
+// boundary handling
+function enforceBounds(bird) {
+  const bsize = BOID.bounds.size;
+  if (BOID.bounds.mode === 'wrap') {
+    if (bird.position.x > bsize) bird.position.x = -bsize;
+    if (bird.position.x < -bsize) bird.position.x = bsize;
+    if (bird.position.y > bsize) bird.position.y = 1; // keep above ground
+    if (bird.position.y < -1) bird.position.y = -1;
+    if (bird.position.z > bsize) bird.position.z = -bsize;
+    if (bird.position.z < -bsize) bird.position.z = bsize;
+  } else if (BOID.bounds.mode === 'bounce') {
+    if (Math.abs(bird.position.x) > bsize) {
+      bird.position.x = Math.sign(bird.position.x) * bsize;
+      bird.userData.velocity.x *= -0.8;
+    }
+    if (bird.position.y > bsize) {
+      bird.position.y = bsize;
+      bird.userData.velocity.y *= -0.8;
+    }
+    if (bird.position.y < -1) {
+      bird.position.y = -1;
+      bird.userData.velocity.y *= -0.8;
+    }
+    if (Math.abs(bird.position.z) > bsize) {
+      bird.position.z = Math.sign(bird.position.z) * bsize;
+      bird.userData.velocity.z *= -0.8;
+    }
+  }
+}
+
+function updateFlock(delta) {
+  // accumulate steering for each bird (so updates don't affect others mid-frame)
+  const steeringForces = new Array(birds.length).fill(null).map(() => new THREE.Vector3());
+
+  for (let i = 0; i < birds.length; i++) {
+    const sep = separation(i).multiplyScalar(BOID.separationWeight);
+    const ali = alignment(i).multiplyScalar(BOID.alignmentWeight);
+    const coh = cohesion(i).multiplyScalar(BOID.cohesionWeight);
+    steeringForces[i].add(sep).add(ali).add(coh);
+  }
+
+  // integrate
+  for (let i = 0; i < birds.length; i++) {
+    const b = birds[i];
+    const acc = b.userData.acceleration;
+    acc.copy(steeringForces[i]); // treat steering as acceleration directly
+
+    // velocity += acceleration * dt
+    b.userData.velocity.addScaledVector(acc, delta);
+
+    // limit speed
+    limitVector(b.userData.velocity, b.userData.maxSpeed);
+
+    // position += velocity * dt
+    b.position.addScaledVector(b.userData.velocity, delta);
+
+    // orientation: make bird look along velocity direction if moving
+    if (b.userData.velocity.lengthSq() > 1e-4) {
+      const vel = b.userData.velocity.clone().normalize();
+      tempVec1.copy(b.position).add(vel);
+      b.lookAt(tempVec1);
+    }
+
+    // ====================================================
+    // 🪽 Wing flap animation (pivot-based, synchronized)
+    // ====================================================
+    const t = performance.now() * 0.005;
+    const tiltAngle = Math.sin(t) * (Math.PI / 4); // ±45°
+
+    const leftWingPivot  = b.userData.leftWingPivot;
+    const rightWingPivot = b.userData.rightWingPivot;
+
+    if (leftWingPivot)  leftWingPivot.rotation.z =  tiltAngle;
+    if (rightWingPivot) rightWingPivot.rotation.z = -tiltAngle;    
+
+    // keep birds slightly above ground (avoid penetrating grid)
+    if (b.position.y < -0.8) b.position.y = -0.8;
+
+    enforceBounds(b);
+  }
+}
+
 
 // ======================= CAMERA HELPERS ===========================
 const tmpForward = new THREE.Vector3();
@@ -302,9 +547,13 @@ function animate() {
 
   const delta = clock.getDelta();
 
+  // boids update
+  updateFlock(delta);
+
   updateCameraMovement(delta);
   updateCameraForMode();
 
+  // only update orbit controls if enabled (you already had this)
   controls.update();
   renderer.render(scene, camera);
 }
