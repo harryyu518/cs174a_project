@@ -4,10 +4,33 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Sky Flock — Minimal</title>
-    <style>html,body{height:100%;margin:0} canvas{display:block}</style>
+
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+
+    <!-- Import map to tell browser where THREE and OrbitControls live -->
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/examples/jsm/controls/OrbitControls.js": "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js"
+      }
+    }
+    </script>
   </head>
+
   <body>
     <canvas id="app"></canvas>
+
+    <!-- Load Harry's main.js -->
     <script type="module" src="/main.js"></script>
   </body>
 </html>
