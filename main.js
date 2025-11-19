@@ -4,6 +4,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { makeBird } from './bird.js';
 import { BOID, updateFlock } from './boids.js';
 import { setupCameraInput, updateCameraMovement, updateCameraForMode } from './camera.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import eagleUrl from './white_eagle_animation_fast_fly.glb?url';
 
 // ======================= RENDERER ===========================
 const canvas = document.getElementById('app');
@@ -73,11 +75,36 @@ const grid = new THREE.GridHelper(40, 40, 0x335577, 0x223344);
 grid.position.y = -1;
 scene.add(grid);
 
+const loader = new GLTFLoader();
+const mixers = [];
+
+// ======================= EAGLE IMPORT ===========================
+const GLTF_ANIM_SPEED = 0.6;
+
+loader.load(eagleUrl, (gltf) => {
+    const model = gltf.scene;
+  model.scale.set(0.1, 0.1, 0.1);       // adjust size
+  model.position.set(0, 0, 0); // place at desired coordinates
+  model.rotation.y = Math.PI;     // face direction you want
+
+  scene.add(model);
+
+  // if glTF contains animations, create mixer and play first clip
+  if (gltf.animations && gltf.animations.length > 0) {
+    const mixer = new THREE.AnimationMixer(model);
+    mixer.timeScale = GLTF_ANIM_SPEED; 
+    mixers.push(mixer);
+    mixer.clipAction(gltf.animations[0]).play();
+  }
+}, undefined, (error) => {
+    console.error(error);
+});
+
+
 // ======================= FLOCK SETUP ===========================
 const NUM_BIRDS = 20;
 const flock = new THREE.Group();
 scene.add(flock);
-
 const birds = [];
 
 // Create and initialize birds
@@ -117,6 +144,9 @@ function animate() {
   updateFlock(birds, delta);
   updateCameraMovement(camera, controls, delta);
   updateCameraForMode(camera, birds, flock);
+
+  // advance any glTF animation mixers
+  if (mixers.length > 0) mixers.forEach((m) => m.update(delta));
 
   controls.update();
   renderer.render(scene, camera);
