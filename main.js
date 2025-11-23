@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { makeBird } from './bird.js';
 import { BOID, updateFlock } from './boids.js';
-import { setupCameraInput, updateCameraMovement, updateCameraForMode } from './camera.js';
+import { setupCameraInput, updateCameraMovement, updateCameraForMode, isSceneFrozen } from './camera.js';
+import { setEagleModel, updateEagleFlight } from './eagleControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import eagleUrl from './white_eagle_animation_fast_fly.glb?url';
 const skyboxUrl = new URL('./free_-_skybox_basic_sky.glb', import.meta.url).href;
@@ -16,6 +17,8 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0f121a);
@@ -45,6 +48,7 @@ sunLight.shadow.camera.left = -100;
 sunLight.shadow.camera.right = 100;
 sunLight.shadow.camera.top = 100;
 sunLight.shadow.camera.bottom = -100;
+sunLight.shadow.bias = -0.0005;
 scene.add(sunLight);
 
 // Sky ambient light (simulate sky reflection)
@@ -97,9 +101,13 @@ loader.load(
 );
 
 // ======================= GRID ===============================
-const grid = new THREE.GridHelper(500, 500, 0x335577, 0x223344);
-grid.position.y = -1;
-scene.add(grid);
+// Invisible receiving plane plus a visible grid overlay for shadows
+const groundMaterial = new THREE.ShadowMaterial({ opacity: 0.25 });
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), groundMaterial);
+ground.rotation.x = -Math.PI / 2; // make it a horizontal floor
+ground.position.y = -3;
+ground.receiveShadow = true;
+scene.add(ground);
 
 // ======================= EAGLE ===============================
 const GLTF_ANIM_SPEED = 0.6;
@@ -109,8 +117,15 @@ loader.load(eagleUrl, (gltf) => {
   model.scale.set(0.1, 0.1, 0.1);       // adjust size
   model.position.set(0, 0, 0); // place at desired coordinates
   model.rotation.y = Math.PI;     // face direction you want
+  model.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
 
   scene.add(model);
+  setEagleModel(model);
 
   // if glTF contains animations, create mixer and play first clip
   if (gltf.animations && gltf.animations.length > 0) {
@@ -133,6 +148,8 @@ const birds = [];
 // Create and initialize birds
 for (let i = 0; i < NUM_BIRDS; i++) {
   const b = makeBird();
+  b.castShadow = true;
+  b.receiveShadow = false;
   b.position.set(
     (Math.random() - 0.5) * 10,
     Math.random() * 3 + 0.2,
@@ -162,14 +179,18 @@ function animate() {
   requestAnimationFrame(animate);
 
   const delta = clock.getDelta();
+  const frozen = isSceneFrozen();
 
   // Update systems
-  updateFlock(birds, delta);
+  if (!frozen) {
+    updateEagleFlight(delta);
+    updateFlock(birds, delta);
+  }
   updateCameraMovement(camera, controls, delta);
   updateCameraForMode(camera, birds, flock);
 
   // advance any glTF animation mixers
-  if (mixers.length > 0) mixers.forEach((m) => m.update(delta));
+  if (!frozen && mixers.length > 0) mixers.forEach((m) => m.update(delta));
 
   controls.update();
   renderer.render(scene, camera);

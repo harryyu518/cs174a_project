@@ -8,6 +8,7 @@ const keys = {
   up: false, down: false,
   boost: false
 };
+let sceneFrozen = false;
 
 const tmpForward = new THREE.Vector3();
 const tmpRight = new THREE.Vector3();
@@ -32,17 +33,25 @@ export function getKeys() {
   return keys;
 }
 
+export function isSceneFrozen() {
+  return sceneFrozen;
+}
+
 // Register keyboard listeners
 export function setupCameraInput(controls, camera) {
   window.addEventListener('keydown', (e) => {
     switch (e.key) {
-      case 'w': case 'W': case 'ArrowUp': keys.forward = true; break;
-      case 's': case 'S': case 'ArrowDown': keys.back = true; break;
-      case 'a': case 'A': case 'ArrowLeft': keys.left = true; break;
-      case 'd': case 'D': case 'ArrowRight': keys.right = true; break;
+      case 'w': case 'W': keys.forward = true; break;
+      case 's': case 'S': keys.back = true; break;
+      case 'a': case 'A': keys.left = true; break;
+      case 'd': case 'D': keys.right = true; break;
       case 'q': case 'Q': keys.up = true; break;
       case 'e': case 'E': keys.down = true; break;
       case 'Shift': keys.boost = true; break;
+      case ' ':
+        sceneFrozen = !sceneFrozen;
+        console.log(`Scene ${sceneFrozen ? 'frozen' : 'unfrozen'}`);
+        break;
 
       case '1':
         cameraMode = 'free';
@@ -74,10 +83,10 @@ export function setupCameraInput(controls, camera) {
 
   window.addEventListener('keyup', (e) => {
     switch (e.key) {
-      case 'w': case 'W': case 'ArrowUp': keys.forward = false; break;
-      case 's': case 'S': case 'ArrowDown': keys.back = false; break;
-      case 'a': case 'A': case 'ArrowLeft': keys.left = false; break;
-      case 'd': case 'D': case 'ArrowRight': keys.right = false; break;
+      case 'w': case 'W': keys.forward = false; break;
+      case 's': case 'S': keys.back = false; break;
+      case 'a': case 'A': keys.left = false; break;
+      case 'd': case 'D': keys.right = false; break;
       case 'q': case 'Q': keys.up = false; break;
       case 'e': case 'E': keys.down = false; break;
       case 'Shift': keys.boost = false; break;

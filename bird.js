@@ -106,5 +106,13 @@ export function makeBird() {
   tail.position.set(0, 0.07, -0.78);
   bird.add(tail);
 
+  // Enable shadow casting on all meshes that make up the bird
+  bird.traverse((obj) => {
+    if (obj.isMesh) {
+      obj.castShadow = true;
+      obj.receiveShadow = false;
+    }
+  });
+
   return bird;
 }
