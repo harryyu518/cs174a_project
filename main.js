@@ -6,6 +6,9 @@ import { BOID, updateFlock } from './boids.js';
 import { setupCameraInput, updateCameraMovement, updateCameraForMode } from './camera.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import eagleUrl from './white_eagle_animation_fast_fly.glb?url';
+const skyboxUrl = new URL('./free_-_skybox_basic_sky.glb', import.meta.url).href;
+const loader = new GLTFLoader();
+const mixers = [];
 
 // ======================= RENDERER ===========================
 const canvas = document.getElementById('app');
@@ -33,7 +36,7 @@ setupCameraInput(controls, camera);
 // ======================= LIGHTS ===========================
 // Realistic sunlight
 const sunLight = new THREE.DirectionalLight(0xfffbf0, 1.2);
-sunLight.position.set(50, 40, 30);
+sunLight.position.set(90, 45, -110);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.width = 4096;
 sunLight.shadow.mapSize.height = 4096;
@@ -70,15 +73,35 @@ const sunGlow = new THREE.Mesh(glowGeometry, glowMaterial);
 sunGlow.position.copy(sunLight.position);
 scene.add(sunGlow);
 
-// ======================= GRID ===========================
-const grid = new THREE.GridHelper(40, 40, 0x335577, 0x223344);
+// ======================= ENVIRONMENT ===========================
+loader.load(
+  skyboxUrl,
+  (gltf) => {
+    const sky = gltf.scene;
+    sky.traverse((child) => {
+      if (child.isMesh && child.material) {
+        child.material.side = THREE.BackSide; // render from inside
+        child.frustumCulled = false; // keep sky always drawn
+      }
+    });
+    // Scale the sky shell so the camera stays inside it
+    const box = new THREE.Box3().setFromObject(sky);
+    const size = box.getSize(new THREE.Vector3()).length() || 1;
+    const scale = 500 / size;
+    sky.scale.setScalar(scale);
+    sky.position.set(0, 0, 0);
+    scene.add(sky);
+  },
+  undefined,
+  (error) => console.error('Failed to load skybox', error)
+);
+
+// ======================= GRID ===============================
+const grid = new THREE.GridHelper(500, 500, 0x335577, 0x223344);
 grid.position.y = -1;
 scene.add(grid);
 
-const loader = new GLTFLoader();
-const mixers = [];
-
-// ======================= EAGLE IMPORT ===========================
+// ======================= EAGLE ===============================
 const GLTF_ANIM_SPEED = 0.6;
 
 loader.load(eagleUrl, (gltf) => {

@@ -5,7 +5,8 @@ let cameraMode = 'free';
 const keys = {
   forward: false, back: false,
   left: false, right: false,
-  up: false, down: false
+  up: false, down: false,
+  boost: false
 };
 
 const tmpForward = new THREE.Vector3();
@@ -14,6 +15,7 @@ const tmpMove = new THREE.Vector3();
 const tmpUp = new THREE.Vector3(0, 1, 0);
 const tmpCenter = new THREE.Vector3();
 const moveSpeed = 6;
+const boostMultiplier = 3; // Shift increases speed by 200% (3x total)
 
 // Get current camera mode
 export function getCameraMode() {
@@ -40,6 +42,7 @@ export function setupCameraInput(controls, camera) {
       case 'd': case 'D': case 'ArrowRight': keys.right = true; break;
       case 'q': case 'Q': keys.up = true; break;
       case 'e': case 'E': keys.down = true; break;
+      case 'Shift': keys.boost = true; break;
 
       case '1':
         cameraMode = 'free';
@@ -77,6 +80,7 @@ export function setupCameraInput(controls, camera) {
       case 'd': case 'D': case 'ArrowRight': keys.right = false; break;
       case 'q': case 'Q': keys.up = false; break;
       case 'e': case 'E': keys.down = false; break;
+      case 'Shift': keys.boost = false; break;
     }
   });
 }
@@ -100,7 +104,8 @@ export function updateCameraMovement(camera, controls, delta) {
   if (keys.down) tmpMove.y -= 1;
 
   if (tmpMove.lengthSq() > 0) {
-    tmpMove.normalize().multiplyScalar(moveSpeed * delta);
+    const speed = moveSpeed * (keys.boost ? boostMultiplier : 1);
+    tmpMove.normalize().multiplyScalar(speed * delta);
     camera.position.add(tmpMove);
     controls.target.add(tmpMove);
   }
