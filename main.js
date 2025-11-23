@@ -100,8 +100,8 @@ loader.load(
   (error) => console.error('Failed to load skybox', error)
 );
 
-// ======================= GRID ===============================
-// Invisible receiving plane plus a visible grid overlay for shadows
+// ======================= GROUND ===============================
+// Invisible receiving plane for shadows
 const groundMaterial = new THREE.ShadowMaterial({ opacity: 0.25 });
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), groundMaterial);
 ground.rotation.x = -Math.PI / 2; // make it a horizontal floor
