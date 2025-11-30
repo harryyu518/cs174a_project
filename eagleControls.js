@@ -11,7 +11,8 @@ const state = {
   velocity: new THREE.Vector3(),
   angularVelocity: 0,
   forwardSpeed: 4.5,
-  lookHelper: null
+  lookHelper: null,
+  visualYaw: Math.PI  // separate yaw for visual rotation only
 };
 
 const tmpVec1 = new THREE.Vector3();
@@ -28,10 +29,22 @@ function setupInput() {
 
   window.addEventListener('keydown', (e) => {
     switch (e.key) {
-      case 'ArrowLeft': eagleInput.left = true; break;
-      case 'ArrowRight': eagleInput.right = true; break;
-      case 'ArrowUp': eagleInput.up = true; break;
-      case 'ArrowDown': eagleInput.down = true; break;
+      case 'ArrowLeft': 
+        eagleInput.left = true; 
+        console.log('Left pressed - angularVelocity:', state.angularVelocity);
+        break;
+      case 'ArrowRight': 
+        eagleInput.right = true; 
+        console.log('Right pressed - angularVelocity:', state.angularVelocity);
+        break;
+      case 'ArrowUp': 
+        eagleInput.up = true; 
+        console.log('Up pressed - angularVelocity:', state.angularVelocity);
+        break;
+      case 'ArrowDown': 
+        eagleInput.down = true; 
+        console.log('Down pressed - angularVelocity:', state.angularVelocity);
+        break;
     }
   });
 
@@ -67,29 +80,32 @@ export function setEagleModel(model) {
 export function updateEagleFlight(delta) {
   if (!state.model) return;
 
-  const hasInput = eagleInput.left || eagleInput.right || eagleInput.up || eagleInput.down;
-
-  const TURN_ACCEL = 3.5;
+  const TURN_ACCEL = 1.5;
   const TURN_DAMP = 2.5;
-  const MAX_TURN_SPEED = 2.6;
+  const MAX_TURN_SPEED = 1.2;
   const PITCH_ACCEL = 2.5;
   const PITCH_DAMP = 2.5;
-  const MAX_PITCH = Math.PI / 2; // 90 degrees
+  const MAX_PITCH = Math.PI / 2;
   const BASE_FORWARD_SPEED = 4.5;
   const TARGET_FORWARD_SPEED = 9.0;
-  const FORWARD_ACCEL = 6.5;
+  const FORWARD_ACCEL = 6.5; // Regular acceleration for other inputs
   const FORWARD_DAMP = 3.0;
   const MIN_HEIGHT = -2.5;
 
-  // Longer press builds turn / climb velocity
+  // Handle turning
   if (eagleInput.left) {
     state.angularVelocity = Math.min(state.angularVelocity + TURN_ACCEL * delta, MAX_TURN_SPEED);
   } else if (eagleInput.right) {
     state.angularVelocity = Math.max(state.angularVelocity - TURN_ACCEL * delta, -MAX_TURN_SPEED);
+    
+    // INCREASED forward acceleration ONLY for right turns
+    const RIGHT_TURN_FORWARD_ACCEL = 50.0; // ← Higher value for right turns only
+    state.forwardSpeed = Math.min(state.forwardSpeed + RIGHT_TURN_FORWARD_ACCEL * delta, TARGET_FORWARD_SPEED);
   } else {
     state.angularVelocity = THREE.MathUtils.damp(state.angularVelocity, 0, TURN_DAMP, delta);
   }
 
+  // Handle pitch
   if (eagleInput.up) {
     state.pitch = Math.min(state.pitch + PITCH_ACCEL * delta, MAX_PITCH);
   } else if (eagleInput.down) {
@@ -98,15 +114,23 @@ export function updateEagleFlight(delta) {
     state.pitch = THREE.MathUtils.damp(state.pitch, 0, PITCH_DAMP, delta);
   }
 
-  // Forward speed ramps with input, rests to zero when AFK
-  if (hasInput) {
+  // Forward speed for other inputs (left, up, down) - uses regular FORWARD_ACCEL
+  const hasOtherInput = eagleInput.left || eagleInput.up || eagleInput.down;
+  if (hasOtherInput && !eagleInput.right) { // Don't double-accelerate if right is also pressed
     state.forwardSpeed = Math.min(state.forwardSpeed + FORWARD_ACCEL * delta, TARGET_FORWARD_SPEED);
-  } else {
+  }
+
+  // Slow down when no keys are pressed
+  if (!eagleInput.left && !eagleInput.right && !eagleInput.up && !eagleInput.down) {
     state.forwardSpeed = THREE.MathUtils.damp(state.forwardSpeed, BASE_FORWARD_SPEED, FORWARD_DAMP, delta);
   }
 
-  state.yaw += state.angularVelocity * delta;
 
+  // Update orientation
+  state.yaw += state.angularVelocity * delta;
+  state.visualYaw = state.yaw;
+
+  // Calculate forward direction
   const cosPitch = Math.cos(state.pitch);
   const sinPitch = Math.sin(state.pitch);
   const forward = tmpVec1.set(
@@ -115,26 +139,23 @@ export function updateEagleFlight(delta) {
     Math.cos(state.yaw) * cosPitch
   ).normalize();
 
+  // Apply movement
   state.velocity.copy(forward).multiplyScalar(state.forwardSpeed);
-
   state.model.position.addScaledVector(state.velocity, delta);
+
+  // Debug to verify right turn gets forward acceleration
+  if (eagleInput.right) {
+    console.log('RIGHT TURN - Speed:', state.forwardSpeed, 'Angular:', state.angularVelocity);
+  }
 
   // Prevent tunneling into ground
   if (state.model.position.y < MIN_HEIGHT) {
     state.model.position.y = MIN_HEIGHT;
-    state.pitch = Math.max(state.pitch, -0.2); // nudge nose up if we hit the floor
+    state.pitch = Math.max(state.pitch, -0.2);
   }
 
-  // Face where we are actually moving; compute orientation without gimbal flips
-  const dir = tmpVec1.copy(state.velocity);
-  const hasSpeed = dir.lengthSq() > 0.0001;
-  if (hasSpeed) {
-    dir.normalize();
-    state.yaw = Math.atan2(dir.x, dir.z);
-    state.pitch = Math.asin(dir.y); // keep pitch aligned to movement
-  } else {
-    dir.set(Math.sin(state.yaw) * Math.cos(state.pitch), Math.sin(state.pitch), Math.cos(state.yaw) * Math.cos(state.pitch));
-  }
+  // Use the ACTUAL flight direction for the model's orientation
+  const dir = forward.clone();
 
   const right = tmpVec2.crossVectors(WORLD_UP, dir).normalize();
   const up = tmpVec3.crossVectors(dir, right).normalize();
@@ -142,10 +163,13 @@ export function updateEagleFlight(delta) {
   tmpMat.lookAt(new THREE.Vector3(0, 0, 0), dir, up);
   tmpQuat.setFromRotationMatrix(tmpMat);
 
-  // bank roll around the forward axis based on turn rate
-  const roll = -state.angularVelocity * 0.12;
+  // Check if we have speed for the roll effect
+  const hasSpeed = state.velocity.lengthSq() > 0.0001;
+  
+  // Bank roll effect
+  const roll = -state.angularVelocity * 0.08;
   if (hasSpeed && Math.abs(roll) > 1e-5) {
-    tmpQuat.multiply(new THREE.Quaternion().setFromAxisAngle(dir, roll * 0.65));
+    tmpQuat.multiply(new THREE.Quaternion().setFromAxisAngle(dir, roll * 0.4));
   }
 
   state.model.quaternion.copy(tmpQuat).multiply(MODEL_ALIGN);
@@ -153,11 +177,11 @@ export function updateEagleFlight(delta) {
   // Update look helper arrow
   if (state.lookHelper) {
     const forwardDir = state.model.getWorldDirection(tmpVec3).normalize();
-    forwardDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2); // rotate 90deg CCW around Y
+    forwardDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
 
     const noseOffset = -2;
-    const sideOffset = -2; // world Z shift
-    const xOffset = 3.64;  // world X shift
+    const sideOffset = -2;
+    const xOffset = 3.64;
 
     state.model.getWorldPosition(tmpVec2);
     tmpVec2.addScaledVector(forwardDir, noseOffset);
