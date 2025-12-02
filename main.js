@@ -140,7 +140,7 @@ loader.load(eagleUrl, (gltf) => {
 
 
 // ======================= FLOCK SETUP ===========================
-const NUM_BIRDS = 20;
+const NUM_BIRDS = 100;
 const flock = new THREE.Group();
 scene.add(flock);
 const birds = [];
@@ -165,6 +165,7 @@ for (let i = 0; i < NUM_BIRDS; i++) {
   b.userData.velocity = v;
   b.userData.acceleration = new THREE.Vector3();
   b.userData.maxSpeed = BOID.maxSpeed;
+  b.userData.baseMaxSpeed = BOID.maxSpeed;
   b.userData.maxForce = BOID.maxForce;
 
   flock.add(b);
