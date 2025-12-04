@@ -1,6 +1,8 @@
 // ======================= CAMERA SYSTEM ===========================
 import * as THREE from 'three';
+import { BOID } from './boids.js';
 import { getEagleState } from './eagleControls.js';
+import { playAmbientAudio, pauseAmbientAudio } from './audio.js';
 
 let cameraMode = 'free';
 
@@ -24,12 +26,23 @@ const tmpMove    = new THREE.Vector3();
 const tmpUp      = new THREE.Vector3();
 const tmpLook    = new THREE.Vector3();
 const tmpQuat    = new THREE.Quaternion();
+const tmpClamp   = new THREE.Vector3();
 
 const moveSpeed = 6;
 const boostMultiplier = 3;
 const FPV_OFFSETS = { up: 0.75, forward: 0.35 };
 const FPV_LOOK_AHEAD = 50;
 const FPV_LERP = 0.35;
+
+function clampToBounds(vec) {
+  const size = BOID.bounds?.size ?? 80;
+  const limit = size - 1;
+  tmpClamp.copy(vec);
+  tmpClamp.x = THREE.MathUtils.clamp(tmpClamp.x, -limit, limit);
+  tmpClamp.y = THREE.MathUtils.clamp(tmpClamp.y, -1, limit);
+  tmpClamp.z = THREE.MathUtils.clamp(tmpClamp.z, -limit, limit);
+  vec.copy(tmpClamp);
+}
 
 
 // --------- helpers / accessors ----------
@@ -77,6 +90,11 @@ export function setupCameraInput(controls, camera) {
               ? 'Paused — press SPACE to resume'
               : 'Press SPACE to pause';
           }
+        }
+        if (sceneFrozen) {
+          pauseAmbientAudio();
+        } else {
+          playAmbientAudio();
         }
         console.log(sceneFrozen ? 'Scene frozen (menu shown)' :
                                   'Scene running (menu hidden)');
@@ -145,6 +163,8 @@ export function updateCameraMovement(camera, controls, delta) {
     tmpMove.normalize().multiplyScalar(speed * delta);
     camera.position.add(tmpMove);
     controls.target.add(tmpMove);
+    clampToBounds(camera.position);
+    clampToBounds(controls.target);
   }
 }
 
@@ -165,8 +185,8 @@ export function updateCameraForMode(camera, birds, flock) {
 
     const desiredPos = new THREE.Vector3(
       center.x,
-      center.y + 40,
-      center.z + 65
+      center.y + 80,
+      center.z + 80
     );
 
     camera.position.lerp(desiredPos, 0.05);

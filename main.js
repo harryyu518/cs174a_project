@@ -3,19 +3,12 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { makeBird } from './bird.js';
 import { BOID, updateFlock } from './boids.js';
-import {
-  setupCameraInput,
-  updateCameraMovement,
-  updateCameraForMode,
-  isSceneFrozen,
-  setCameraMode,
-  getCameraMode
-} from './camera.js';
+import {setupCameraInput, updateCameraMovement, updateCameraForMode, isSceneFrozen, setCameraMode, getCameraMode} from './camera.js';
 import { setEagleModel, updateEagleFlight } from './eagleControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-import eagleUrl from './white_eagle_animation_fast_fly.glb?url';
-const skyboxUrl = new URL('./free_-_skybox_basic_sky.glb', import.meta.url).href;
+import eagleUrl from './assets/white_eagle_animation_fast_fly.glb?url';
+const skyboxUrl = new URL('./assets/free_-_skybox_basic_sky.glb', import.meta.url).href;
 
 const loader = new GLTFLoader();
 const mixers = [];
@@ -34,16 +27,13 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0f121a);
 
 // ======================= CAMERA ===========================
-const camera = new THREE.PerspectiveCamera(
-  45,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  500
-);
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
 camera.position.set(0, 2.5, 8);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
+controls.minDistance = 2;
+controls.maxDistance = 120; // prevent zooming way out into empty space
 
 // Setup camera input handling (WASD, 1/2/3, SPACE)
 setupCameraInput(controls, camera);
@@ -159,7 +149,7 @@ loader.load(
 );
 
 // ======================= FLOCK SETUP ===========================
-const NUM_BIRDS = 100;
+const NUM_BIRDS = 200;
 const flock = new THREE.Group();
 scene.add(flock);
 const birds = [];

@@ -29,8 +29,7 @@ export const BOID = {
   groundLiftBoost: 1.5,
   bounds: {
     mode: 'bounce', // 'wrap' or 'bounce' or 'none'
-    size: 40,
-    zMin: 0 // restrict z to positive side (0 .. size)
+    size: 80
   }
 };
 
@@ -209,7 +208,7 @@ export function boundaryAvoidance(bird) {
   const size = BOID.bounds.size;
   const yMin = -1;
   const yMax = BOID.bounds.mode === 'wrap' ? 1 : size;
-  const zMin = BOID.bounds.zMin ?? -size;
+  const zMin = -size;
   const zMax = size;
 
   const steer = new THREE.Vector3();
@@ -264,7 +263,7 @@ export function boundaryAvoidance(bird) {
 // Boundary handling
 export function enforceBounds(bird) {
   const bsize = BOID.bounds.size;
-  const zMin = BOID.bounds.zMin ?? -bsize;
+  const zMin = -bsize;
   if (BOID.bounds.mode === 'wrap') {
     if (bird.position.x > bsize) bird.position.x = -bsize;
     if (bird.position.x < -bsize) bird.position.x = bsize;
