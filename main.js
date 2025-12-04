@@ -7,7 +7,9 @@ import {
   setupCameraInput,
   updateCameraMovement,
   updateCameraForMode,
-  isSceneFrozen
+  isSceneFrozen,
+  setCameraMode,
+  getCameraMode
 } from './camera.js';
 import { setEagleModel, updateEagleFlight } from './eagleControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -138,6 +140,13 @@ loader.load(
     scene.add(model);
     setEagleModel(model);
 
+    // Auto-focus camera on eagle FPV when loaded
+    setCameraMode('tailCam');
+    controls.enabled = false;
+    camera.position.set(0, 1.0, -4.5);  // initial offset, will be smoothed in camera.js
+    camera.lookAt(model.position);
+
+    // if glTF contains animations, create mixer and play first clip
     if (gltf.animations && gltf.animations.length > 0) {
       const mixer = new THREE.AnimationMixer(model);
       mixer.timeScale = GLTF_ANIM_SPEED;
@@ -190,6 +199,7 @@ function animate() {
 
   const delta  = clock.getDelta();
   const frozen = isSceneFrozen();
+  const mode = getCameraMode();
 
   if (!frozen) {
     updateEagleFlight(delta);
@@ -203,7 +213,12 @@ function animate() {
   updateCameraMovement(camera, controls, delta);
   updateCameraForMode(camera, birds, flock);
 
-  controls.update();
+  // advance any glTF animation mixers
+  if (!frozen && mixers.length > 0) mixers.forEach((m) => m.update(delta));
+
+  // Only let OrbitControls influence the camera in free mode;
+  // otherwise tail-cam/overview get overwritten toward the origin target.
+  if (mode === 'free') controls.update();
   renderer.render(scene, camera);
 }
 

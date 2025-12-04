@@ -21,9 +21,15 @@ let sceneFrozen = true;
 const tmpForward = new THREE.Vector3();
 const tmpRight   = new THREE.Vector3();
 const tmpMove    = new THREE.Vector3();
+const tmpUp      = new THREE.Vector3();
+const tmpLook    = new THREE.Vector3();
+const tmpQuat    = new THREE.Quaternion();
 
 const moveSpeed = 6;
 const boostMultiplier = 3;
+const FPV_OFFSETS = { up: 0.75, forward: 0.35 };
+const FPV_LOOK_AHEAD = 50;
+const FPV_LERP = 0.35;
 
 
 // --------- helpers / accessors ----------
@@ -97,7 +103,7 @@ export function setupCameraInput(controls, camera) {
       case '3':
         cameraMode = 'tailCam';
         controls.enabled = false;
-        console.log('Mode: EAGLE TAIL CAM');
+        console.log('Mode: EAGLE FIRST-PERSON');
         break;
     }
   });
@@ -167,33 +173,32 @@ export function updateCameraForMode(camera, birds, flock) {
     camera.lookAt(center);
   }
 
-  // ---------- MODE 3: EAGLE TAIL CAM (LOCKED) ----------
+  // ---------- MODE 3: EAGLE FIRST-PERSON ----------
   else if (cameraMode === 'tailCam') {
     const eagle = getEagleState();
     if (!eagle || !eagle.model) return;
 
-    const model    = eagle.model;
-    const eaglePos = model.position.clone();
+    const model = eagle.model;
+    model.updateMatrixWorld(true);
 
-    // Eagle forward & up directions
-    const forward = new THREE.Vector3(0, 0, 1)
-      .applyQuaternion(model.quaternion)
-      .normalize();
+    // World-space forward/up so FPV follows pitch/roll
+    model.getWorldQuaternion(tmpQuat);
+    model.getWorldPosition(tmpMove);
 
-    const up = new THREE.Vector3(0, 1, 0)
-      .applyQuaternion(model.quaternion)
-      .normalize();
+    // Model is yaw-offset by 90 degrees (see MODEL_ALIGN in eagleControls),
+    // so use +X as the local "nose" direction instead of +Z.
+    const forward = tmpForward.set(1, 0, 0).applyQuaternion(tmpQuat).normalize();
+    const up = tmpUp.set(0, 1, 0).applyQuaternion(tmpQuat).normalize();
 
-    // Camera rigidly locked behind eagle
-    const camPos = eaglePos.clone()
-      .add(up.multiplyScalar(0.8))
-      .add(forward.clone().multiplyScalar(-4.5));
+    // Ride near the eagle's head for a first-person view
+    tmpMove
+      .addScaledVector(up, FPV_OFFSETS.up)
+      .addScaledVector(forward, FPV_OFFSETS.forward);
 
-    camera.position.copy(camPos);
+    camera.position.lerp(tmpMove, FPV_LERP);
 
-    const lookAt = eaglePos.clone()
-      .add(forward.clone().multiplyScalar(30));
-
-    camera.lookAt(lookAt);
+    tmpLook.copy(tmpMove).addScaledVector(forward, FPV_LOOK_AHEAD);
+    camera.up.copy(up);
+    camera.lookAt(tmpLook);
   }
 }

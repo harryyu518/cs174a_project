@@ -11,11 +11,12 @@ export const BOID = {
   alignmentWeight: 1.0,
   cohesionWeight: 0.9,
   separationWeight: 3.2,
-  predatorRadius: 6.0,
+  predatorRadius: 12.0,      // see the eagle from farther away
   predatorWeight: 3.2,
   predatorForceMultiplier: 2.0,
-  predatorSpeedBoost: 1.2,
-  predatorSpeedOvertake: 0.1,
+  predatorExp: 2.5,           // exponential sharpness as eagle gets close
+  predatorMinSpeedLead: 1.35, // birds run at least this multiple of eagle speed
+  predatorMaxSpeedBoost: 3.0, // max multiple of base speed when fleeing hard
   boundaryMargin: 6.0,
   boundaryWeight: 1.0,
   boundaryTangential: 0.6,
@@ -141,7 +142,7 @@ export function cohesion(index, birds) {
 
 // Boid rule: Predator avoidance (flee from eagle)
 export function predatorAvoidance(index, birds, eagleState) {
-  if (!eagleState?.model) return { force: new THREE.Vector3(), threat: 0 };
+  if (!eagleState?.model) return { force: new THREE.Vector3(), speedMult: 1 };
 
   const self = birds[index];
   const pos = self.position;
@@ -152,24 +153,52 @@ export function predatorAvoidance(index, birds, eagleState) {
 
   const toBird = tempVec1.subVectors(pos, eaglePos);
   const d = toBird.length();
-  if (d === 0 || d > avoidRadius) return { force: new THREE.Vector3(), threat: 0 };
+  if (d === 0 || d > avoidRadius) return { force: new THREE.Vector3(), speedMult: 1 };
 
-  const steer = new THREE.Vector3();
+  const toBirdNorm = toBird.normalize();
+  const baseMax = self.userData.baseMaxSpeed ?? self.userData.maxSpeed;
 
-  // How directly the eagle is heading at the bird (0..1)
-  let headingFactor = 0;
+  // Detect head-on closing: eagle moving toward bird AND/OR bird moving toward eagle
+  const birdVel = self.userData.velocity ?? tempVec2.set(0, 0, 0);
+  let closing = 0;
   if (eagleSpeed > 1e-5) {
-    headingFactor = Math.max(0, eagleVel.clone().normalize().dot(toBird.clone().normalize()));
+    closing += Math.max(0, eagleVel.clone().normalize().dot(toBirdNorm));
   }
+  const birdSpeed = birdVel.length();
+  if (birdSpeed > 1e-5) {
+    const birdDir = tempVec2.copy(birdVel).normalize();
+    closing += Math.max(0, -birdDir.dot(toBirdNorm));
+  }
+  closing = THREE.MathUtils.clamp(closing, 0, 2); // 0 = diverging, 2 = both barreling head-on
 
-  // Stronger push when closer to the eagle
-  const urgency = (avoidRadius - d) / avoidRadius;
-  steer.subVectors(pos, eaglePos).normalize().multiplyScalar(self.userData.maxSpeed * urgency);
-  steer.sub(self.userData.velocity);
-  limitVector(steer, self.userData.maxForce * BOID.predatorForceMultiplier);
+  // Add a lateral dodge when closing head-on to avoid straight-line collisions
+  const sideDir = tempVec3.crossVectors(toBirdNorm, new THREE.Vector3(0, 1, 0));
+  if (sideDir.lengthSq() < 1e-6) sideDir.set(1, 0, 0).cross(toBirdNorm); // avoid degenerate up
+  sideDir.normalize();
 
-  const threat = urgency * headingFactor;
-  return { force: steer, threat, eagleSpeed };
+  const fleeDir = toBirdNorm.clone();
+  if (closing > 0.2) fleeDir.addScaledVector(sideDir, closing * 0.6).normalize();
+
+  // Urgency rises exponentially as the eagle gets closer
+  const urgency = THREE.MathUtils.clamp((avoidRadius - d) / avoidRadius, 0, 1);
+  const expBoost = Math.expm1(urgency * BOID.predatorExp) * (1 + 0.5 * closing); // boost more when head-on
+
+  // Desired speed scales with urgency and guarantees an overtake margin vs eagle
+  const desiredSpeed = Math.min(
+    baseMax * (1 + expBoost),
+    baseMax * BOID.predatorMaxSpeedBoost
+  ) * (1 + 0.3 * closing);
+  const minLeadSpeed = eagleSpeed * BOID.predatorMinSpeedLead;
+  const targetSpeed = Math.max(desiredSpeed, minLeadSpeed);
+
+  const desiredVel = fleeDir.multiplyScalar(targetSpeed);
+  const steer = desiredVel.sub(self.userData.velocity);
+
+  const forceLimit = self.userData.maxForce * (BOID.predatorForceMultiplier * (1 + expBoost) * (1 + 0.25 * closing));
+  limitVector(steer, forceLimit);
+
+  const speedMult = targetSpeed / baseMax;
+  return { force: steer, speedMult };
 }
 
 // Boid rule: Boundary avoidance (steer away before hitting edges)
@@ -275,15 +304,15 @@ export function updateFlock(birds, delta) {
   const eagleState = getEagleState();
   const eagleSpeed = eagleState?.velocity ? eagleState.velocity.length() : 0;
   const steeringForces = new Array(birds.length).fill(null).map(() => new THREE.Vector3());
-  const threatLevels = new Array(birds.length).fill(0);
+  const fleeBoosts = new Array(birds.length).fill(1);
   const boundaryProximity = new Array(birds.length).fill(0);
 
   for (let i = 0; i < birds.length; i++) {
     const sep = separation(i, birds).multiplyScalar(BOID.separationWeight);
     const ali = alignment(i, birds).multiplyScalar(BOID.alignmentWeight);
     const coh = cohesion(i, birds).multiplyScalar(BOID.cohesionWeight);
-    const { force: fleeForce, threat } = predatorAvoidance(i, birds, eagleState);
-    threatLevels[i] = threat;
+    const { force: fleeForce, speedMult: fleeSpeedMult } = predatorAvoidance(i, birds, eagleState);
+    fleeBoosts[i] = fleeSpeedMult;
     const flee = fleeForce.multiplyScalar(BOID.predatorWeight);
     const { force: boundForce, proximity } = boundaryAvoidance(birds[i]);
     boundaryProximity[i] = proximity;
@@ -294,13 +323,16 @@ export function updateFlock(birds, delta) {
   for (let i = 0; i < birds.length; i++) {
     const b = birds[i];
     const acc = b.userData.acceleration;
-    const threat = threatLevels[i];
     const prox = boundaryProximity[i];
     const baseMax = b.userData.baseMaxSpeed ?? b.userData.maxSpeed;
-    const boostedMax = baseMax * (1 + BOID.predatorSpeedBoost * threat);
-    const matchEagle = threat > 0 ? eagleSpeed * (1 + BOID.predatorSpeedOvertake * Math.max(0, threat)) : 0;
     const boundarySlow = THREE.MathUtils.clamp(1 - BOID.boundarySlowdown * prox, 0.4, 1);
-    const effectiveMaxSpeed = Math.max(baseMax * boundarySlow, boostedMax, matchEagle);
+    const fleeBoost = fleeBoosts[i];
+    const minLead = eagleSpeed * BOID.predatorMinSpeedLead;
+    const effectiveMaxSpeed = Math.max(
+      baseMax * boundarySlow,
+      baseMax * fleeBoost,
+      minLead
+    );
 
     acc.copy(steeringForces[i]);
 

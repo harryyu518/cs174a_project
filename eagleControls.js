@@ -197,8 +197,8 @@ export function updateEagleFlight(delta) {
 
   // === UPDATE LOOK HELPER ARROW ===
   if (state.lookHelper) {
-    const forwardDir = state.model.getWorldDirection(tmpVec3).normalize();
-    forwardDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+    // Use the computed flight direction so the helper follows climbs/dives too
+    const forwardDir = tmpVec3.copy(forward).normalize();
 
     const noseOffset = -2;
     const sideOffset = -2;
