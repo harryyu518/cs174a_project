@@ -213,9 +213,6 @@ function animate() {
   updateCameraMovement(camera, controls, delta);
   updateCameraForMode(camera, birds, flock);
 
-  // advance any glTF animation mixers
-  if (!frozen && mixers.length > 0) mixers.forEach((m) => m.update(delta));
-
   // Only let OrbitControls influence the camera in free mode;
   // otherwise tail-cam/overview get overwritten toward the origin target.
   if (mode === 'free') controls.update();
