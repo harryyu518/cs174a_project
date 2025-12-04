@@ -1,5 +1,6 @@
 // ======================= EAGLE FLIGHT CONTROLS ===========================
 import * as THREE from 'three';
+import { BOID } from './boids.js';
 
 const eagleInput = { left: false, right: false, up: false, down: false };
 let inputSetup = false;
@@ -177,6 +178,51 @@ export function updateEagleFlight(delta) {
       state.pitch = -0.1;
       state.pitchVelocity = Math.max(state.pitchVelocity, 0);
     }
+  }
+
+  // === BOUNDARY HANDLING (MATCH BOIDS SYSTEM) ===
+  const bsize = BOID.bounds.size;
+  const zMin = BOID.bounds.zMin ?? -bsize;
+  
+  if (BOID.bounds.mode === 'wrap') {
+    if (state.model.position.x > bsize) state.model.position.x = -bsize;
+    if (state.model.position.x < -bsize) state.model.position.x = bsize;
+    if (state.model.position.y > bsize) state.model.position.y = 1;
+    if (state.model.position.y < -1) state.model.position.y = -1;
+    if (state.model.position.z > bsize) state.model.position.z = zMin;
+    if (state.model.position.z < zMin) state.model.position.z = bsize;
+  } else if (BOID.bounds.mode === 'bounce') {
+    const bounceAxis = (axis, min, max) => {
+      const pos = state.model.position[axis];
+      if (pos < min) {
+        // Hit min boundary - push back in and reverse that velocity component
+        state.model.position[axis] = min;
+        state.velocity[axis] = Math.abs(state.velocity[axis]); // Make positive (inward)
+        
+        // Update yaw if bouncing on x or z
+        if (axis === 'x' || axis === 'z') {
+          const newDir = state.velocity.clone().normalize();
+          state.yaw = Math.atan2(newDir.x, newDir.z);
+        }
+      } else if (pos > max) {
+        // Hit max boundary - push back in and reverse that velocity component
+        state.model.position[axis] = max;
+        state.velocity[axis] = -Math.abs(state.velocity[axis]); // Make negative (inward)
+        
+        // Update yaw if bouncing on x or z
+        if (axis === 'x' || axis === 'z') {
+          const newDir = state.velocity.clone().normalize();
+          state.yaw = Math.atan2(newDir.x, newDir.z);
+        }
+      }
+    };
+
+    bounceAxis('x', -bsize, bsize);
+    bounceAxis('y', -1, bsize);
+    bounceAxis('z', zMin, bsize);
+    
+    // Update forward speed to match new velocity after bounces
+    state.forwardSpeed = state.velocity.length();
   }
 
   // === UPDATE MODEL ORIENTATION ===
