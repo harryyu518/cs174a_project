@@ -4,6 +4,7 @@ import { getEagleState } from './eagleControls.js';
 
 let cameraMode = 'free';
 
+// WASD free camera keys
 const keys = {
   forward: false,
   back: false,
@@ -14,7 +15,8 @@ const keys = {
   boost: false
 };
 
-let sceneFrozen = false;
+// Start FROZEN so we show menu first
+let sceneFrozen = true;
 
 const tmpForward = new THREE.Vector3();
 const tmpRight   = new THREE.Vector3();
@@ -40,8 +42,15 @@ export function isSceneFrozen() {
 
 // ======================= INPUT SETUP ===========================
 export function setupCameraInput(controls, camera) {
+  // Make sure overlay matches initial frozen state
+  const overlay  = document.getElementById('ui-overlay');
+  const mainText = document.getElementById('ui-main-text');
+  if (overlay) overlay.style.display = 'flex';
+  if (mainText) mainText.textContent = 'Press SPACE to start';
+
   window.addEventListener('keydown', (e) => {
     switch (e.key) {
+      // Free camera WASD
       case 'w': case 'W': keys.forward = true; break;
       case 's': case 'S': keys.back    = true; break;
       case 'a': case 'A': keys.left    = true; break;
@@ -50,21 +59,30 @@ export function setupCameraInput(controls, camera) {
       case 'e': case 'E': keys.down    = true; break;
       case 'Shift':       keys.boost   = true; break;
 
+      // SPACE = toggle freeze + menu
       case ' ':
         sceneFrozen = !sceneFrozen;
-        console.log(sceneFrozen ? 'Scene frozen' : 'Scene unfrozen');
+        {
+          const ov  = document.getElementById('ui-overlay');
+          const txt = document.getElementById('ui-main-text');
+          if (ov) ov.style.display = sceneFrozen ? 'flex' : 'none';
+          if (txt) {
+            txt.textContent = sceneFrozen
+              ? 'Paused — press SPACE to resume'
+              : 'Press SPACE to pause';
+          }
+        }
+        console.log(sceneFrozen ? 'Scene frozen (menu shown)' :
+                                  'Scene running (menu hidden)');
         break;
 
       // ---------- CAMERA MODE 1: FREE ----------
       case '1':
         cameraMode = 'free';
         controls.enabled = true;
-
-        // Reset camera to a nice default free-view
         camera.position.set(0, 2.5, 8);
         controls.target.set(0, 0, 0);
         controls.update();
-
         console.log('Mode: FREE CAMERA');
         break;
 
@@ -166,10 +184,10 @@ export function updateCameraForMode(camera, birds, flock) {
       .applyQuaternion(model.quaternion)
       .normalize();
 
-    // Camera rigidly locked behind eagle (no lerp)
+    // Camera rigidly locked behind eagle
     const camPos = eaglePos.clone()
-      .add(up.multiplyScalar(0.8))               // height above back
-      .add(forward.clone().multiplyScalar(-4.5)); // distance behind
+      .add(up.multiplyScalar(0.8))
+      .add(forward.clone().multiplyScalar(-4.5));
 
     camera.position.copy(camPos);
 

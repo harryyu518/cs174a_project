@@ -11,8 +11,56 @@
         margin: 0;
         overflow: hidden;
       }
+
       canvas {
         display: block;
+      }
+
+      /* Centered overlay for menu / pause */
+      #ui-overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #ffffff;
+        text-align: center;
+        background: radial-gradient(circle at top, rgba(0,0,0,0.6), rgba(0,0,0,0.9));
+        z-index: 10;
+      }
+
+      #ui-panel {
+        background: rgba(0, 0, 0, 0.55);
+        padding: 24px 36px;
+        border-radius: 14px;
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
+        max-width: 420px;
+      }
+
+      #ui-overlay h1 {
+        margin: 0 0 12px;
+        font-size: 2rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      #ui-overlay p {
+        margin: 4px 0;
+        font-size: 1rem;
+        opacity: 0.92;
+      }
+
+      #ui-main-text {
+        font-weight: 600;
+        margin-bottom: 10px;
+      }
+
+      #ui-hint {
+        margin-top: 10px;
+        font-size: 0.85rem;
+        opacity: 0.7;
       }
     </style>
 
@@ -28,9 +76,26 @@
   </head>
 
   <body>
+    <!-- Menu / pause overlay -->
+    <div id="ui-overlay">
+      <div id="ui-panel">
+        <h1>SKY FLOCK</h1>
+
+        <p id="ui-main-text">Press <strong>SPACE</strong> to start</p>
+
+        <p>Arrow keys: control eagle</p>
+        <p>1: Free camera (WASD + mouse)</p>
+        <p>2: Flock overview camera</p>
+        <p>3: Eagle tail cam (locked behind eagle)</p>
+
+        <p id="ui-hint">
+          Press SPACE anytime to pause and show this menu again.
+        </p>
+      </div>
+    </div>
+
     <canvas id="app"></canvas>
 
-    <!-- Load Harry's main.js -->
     <script type="module" src="/main.js"></script>
   </body>
 </html>
