@@ -3,13 +3,21 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { makeBird } from './bird.js';
 import { BOID, updateFlock } from './boids.js';
-import { setupCameraInput, updateCameraMovement, updateCameraForMode, isSceneFrozen } from './camera.js';
+import {
+  setupCameraInput,
+  updateCameraMovement,
+  updateCameraForMode,
+  isSceneFrozen,
+  setCameraMode
+} from './camera.js';
 import { setEagleModel, updateEagleFlight } from './eagleControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import eagleUrl from './white_eagle_animation_fast_fly.glb?url';
+
 const skyboxUrl = new URL('./free_-_skybox_basic_sky.glb', import.meta.url).href;
 const loader = new GLTFLoader();
 const mixers = [];
+
 
 // ======================= RENDERER ===========================
 const canvas = document.getElementById('app');
@@ -20,21 +28,24 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+
+// ======================= SCENE ===========================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0f121a);
 
+
 // ======================= CAMERA ===========================
 const camera = new THREE.PerspectiveCamera(
-  45, window.innerWidth / window.innerHeight, 0.1, 500
+ 45, window.innerWidth / window.innerHeight, 0.1, 500
 );
 camera.position.set(0, 2.5, 8);
 
-// Orbit Controls (mouse navigation)
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
-// Setup camera input handling
+// Keyboard input for camera modes / free-fly
 setupCameraInput(controls, camera);
+
 
 // ======================= LIGHTS ===========================
 // Realistic sunlight
@@ -77,7 +88,8 @@ const sunGlow = new THREE.Mesh(glowGeometry, glowMaterial);
 sunGlow.position.copy(sunLight.position);
 scene.add(sunGlow);
 
-// ======================= ENVIRONMENT ===========================
+
+// ======================= ENVIRONMENT (SKYBOX) ====================
 loader.load(
   skyboxUrl,
   (gltf) => {
@@ -85,9 +97,10 @@ loader.load(
     sky.traverse((child) => {
       if (child.isMesh && child.material) {
         child.material.side = THREE.BackSide; // render from inside
-        child.frustumCulled = false; // keep sky always drawn
+        child.frustumCulled = false;          // keep sky always drawn
       }
     });
+
     // Scale the sky shell so the camera stays inside it
     const box = new THREE.Box3().setFromObject(sky);
     const size = box.getSize(new THREE.Vector3()).length() || 1;
@@ -100,7 +113,8 @@ loader.load(
   (error) => console.error('Failed to load skybox', error)
 );
 
-// ======================= GROUND ===============================
+
+// ======================= GROUND ===========================
 // Invisible receiving plane for shadows
 const groundMaterial = new THREE.ShadowMaterial({ opacity: 0.25 });
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), groundMaterial);
@@ -109,34 +123,47 @@ ground.position.y = -3;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// ======================= EAGLE ===============================
+
+// ======================= EAGLE ===========================
 const GLTF_ANIM_SPEED = 0.6;
 
-loader.load(eagleUrl, (gltf) => {
+loader.load(
+  eagleUrl,
+  (gltf) => {
     const model = gltf.scene;
-  model.scale.set(0.1, 0.1, 0.1);       // adjust size
-  model.position.set(0, 0, 0); // place at desired coordinates
-  model.rotation.y = Math.PI;     // face direction you want
-  model.traverse((child) => {
-    if (child.isMesh) {
-      child.castShadow = true;
-      child.receiveShadow = true;
+    model.scale.set(0.1, 0.1, 0.1);
+    model.position.set(0, 0, 0);
+    model.rotation.y = Math.PI;
+
+    model.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+
+    scene.add(model);
+    setEagleModel(model);
+
+    // 🔥 Auto-focus camera on eagle tail-cam when loaded
+    setCameraMode('tailCam');
+    controls.enabled = false;
+    camera.position.set(0, 1.0, -4.5);  // initial offset, will be smoothed in camera.js
+    camera.lookAt(model.position);
+
+    // if glTF contains animations, create mixer and play first clip
+    if (gltf.animations && gltf.animations.length > 0) {
+      const mixer = new THREE.AnimationMixer(model);
+      mixer.timeScale = GLTF_ANIM_SPEED;
+      mixers.push(mixer);
+      mixer.clipAction(gltf.animations[0]).play();
     }
-  });
-
-  scene.add(model);
-  setEagleModel(model);
-
-  // if glTF contains animations, create mixer and play first clip
-  if (gltf.animations && gltf.animations.length > 0) {
-    const mixer = new THREE.AnimationMixer(model);
-    mixer.timeScale = GLTF_ANIM_SPEED; 
-    mixers.push(mixer);
-    mixer.clipAction(gltf.animations[0]).play();
-  }
-}, undefined, (error) => {
+  },
+  undefined,
+  (error) => {
     console.error(error);
-});
+  }
+);
 
 
 // ======================= FLOCK SETUP ===========================
@@ -187,6 +214,7 @@ function animate() {
     updateEagleFlight(delta);
     updateFlock(birds, delta);
   }
+
   updateCameraMovement(camera, controls, delta);
   updateCameraForMode(camera, birds, flock);
 
@@ -198,6 +226,7 @@ function animate() {
 }
 
 animate();
+
 
 // ======================= RESIZE ===========================
 window.addEventListener('resize', () => {
