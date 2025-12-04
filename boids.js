@@ -6,20 +6,20 @@ import { getEagleState } from './eagleControls.js';
 export const BOID = {
   maxSpeed: 4.0,
   maxForce: 0.08,
-  neighborRadius: 2.5,
-  separationRadius: 1.4,
-  alignmentWeight: 1.0,
-  cohesionWeight: 0.9,
-  separationWeight: 3.2,
-  predatorRadius: 12.0,      // see the eagle from farther away
+  neighborRadius: 3.5,
+  separationRadius: 1.1,
+  alignmentWeight: 1.35,
+  cohesionWeight: 1.15,
+  separationWeight: 2.4,
+  predatorRadius: 12.0,      
   predatorWeight: 3.2,
   predatorForceMultiplier: 2.0,
-  predatorExp: 2.5,           // exponential sharpness as eagle gets close
-  predatorMinSpeedLead: 1.35, // birds run at least this multiple of eagle speed
-  predatorMaxSpeedBoost: 3.0, // max multiple of base speed when fleeing hard
+  predatorExp: 2.5,           
+  predatorMinSpeedLead: 1.35, 
+  predatorMaxSpeedBoost: 3.0, 
   boundaryMargin: 6.0,
-  boundaryWeight: 1.0,
-  boundaryTangential: 0.6,
+  boundaryWeight: 1.15,
+  boundaryTangential: 1.0,
   boundarySlowdown: 0.4,
   boundarySoftness: 0.6,
   stallSpeed: 0.35,
@@ -61,7 +61,7 @@ export function separation(index, birds) {
       // Stronger push when closer; smooth falloff to avoid jitter
       const dir = tempVec1.subVectors(pos, other.position).normalize();
       const falloff = 1 - THREE.MathUtils.smoothstep(d, 0, desiredSeparation);
-      const strength = falloff * falloff; // ease-in for gentler onset, strong near
+      const strength = falloff * falloff; 
       steer.addScaledVector(dir, strength / Math.max(d, 0.0001));
       count++;
     }
@@ -86,24 +86,28 @@ export function alignment(index, birds) {
   const pos = self.position;
   const neighDist = BOID.neighborRadius;
 
-  const sum = new THREE.Vector3();
-  let count = 0;
+  const avgVelocity = new THREE.Vector3();
+  let weightSum = 0;
   for (let i = 0; i < birds.length; i++) {
     if (i === index) continue;
     const other = birds[i];
     const d = pos.distanceTo(other.position);
     if (d > 0 && d < neighDist) {
-      sum.add(other.userData.velocity);
-      count++;
+      // Closer neighbors influence more; smooth falloff avoids jitter at the edge
+      const influence = 1 - THREE.MathUtils.smoothstep(d, 0, neighDist);
+      avgVelocity.addScaledVector(other.userData.velocity, influence);
+      weightSum += influence;
     }
   }
 
-  if (count > 0) {
-    sum.divideScalar(count);
-    sum.setLength(self.userData.maxSpeed);
-    sum.sub(self.userData.velocity);
-    limitVector(sum, self.userData.maxForce);
-    return sum;
+  if (weightSum > 0) {
+    avgVelocity.divideScalar(weightSum);
+    if (avgVelocity.lengthSq() === 0) return new THREE.Vector3();
+
+    avgVelocity.setLength(self.userData.maxSpeed);
+    avgVelocity.sub(self.userData.velocity);
+    limitVector(avgVelocity, self.userData.maxForce);
+    return avgVelocity;
   }
 
   return new THREE.Vector3();
@@ -116,24 +120,27 @@ export function cohesion(index, birds) {
   const neighDist = BOID.neighborRadius;
 
   const center = new THREE.Vector3();
-  let count = 0;
+  let weightSum = 0;
   for (let i = 0; i < birds.length; i++) {
     if (i === index) continue;
     const other = birds[i];
     const d = pos.distanceTo(other.position);
     if (d > 0 && d < neighDist) {
-      center.add(other.position);
-      count++;
+      const influence = 1 - THREE.MathUtils.smoothstep(d, 0, neighDist);
+      center.addScaledVector(other.position, influence);
+      weightSum += influence;
     }
   }
 
-  if (count > 0) {
-    center.divideScalar(count);
-    tempVec1.subVectors(center, pos);
-    tempVec1.setLength(self.userData.maxSpeed);
-    tempVec1.sub(self.userData.velocity);
-    limitVector(tempVec1, self.userData.maxForce);
-    return tempVec1;
+  if (weightSum > 0) {
+    center.divideScalar(weightSum);
+    const desired = center.sub(pos);
+    if (desired.lengthSq() === 0) return new THREE.Vector3();
+
+    desired.setLength(self.userData.maxSpeed);
+    desired.sub(self.userData.velocity);
+    limitVector(desired, self.userData.maxForce);
+    return desired;
   }
 
   return new THREE.Vector3();
@@ -172,7 +179,7 @@ export function predatorAvoidance(index, birds, eagleState) {
 
   // Add a lateral dodge when closing head-on to avoid straight-line collisions
   const sideDir = tempVec3.crossVectors(toBirdNorm, new THREE.Vector3(0, 1, 0));
-  if (sideDir.lengthSq() < 1e-6) sideDir.set(1, 0, 0).cross(toBirdNorm); // avoid degenerate up
+  if (sideDir.lengthSq() < 1e-6) sideDir.set(1, 0, 0).cross(toBirdNorm); 
   sideDir.normalize();
 
   const fleeDir = toBirdNorm.clone();

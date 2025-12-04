@@ -6,10 +6,9 @@ import { BOID, updateFlock } from './boids.js';
 import {setupCameraInput, updateCameraMovement, updateCameraForMode, isSceneFrozen, setCameraMode, getCameraMode} from './camera.js';
 import { setEagleModel, updateEagleFlight } from './eagleControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-
 import eagleUrl from './assets/white_eagle_animation_fast_fly.glb?url';
-const skyboxUrl = new URL('./assets/free_-_skybox_basic_sky.glb', import.meta.url).href;
 
+const skyboxUrl = new URL('./assets/free_-_skybox_basic_sky.glb', import.meta.url).href;
 const loader = new GLTFLoader();
 const mixers = [];
 
@@ -33,7 +32,7 @@ camera.position.set(0, 2.5, 8);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.minDistance = 2;
-controls.maxDistance = 120; // prevent zooming way out into empty space
+controls.maxDistance = 150; 
 
 // Setup camera input handling (WASD, 1/2/3, SPACE)
 setupCameraInput(controls, camera);
@@ -44,11 +43,11 @@ sunLight.position.set(90, 45, -110);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.width = 4096;
 sunLight.shadow.mapSize.height = 4096;
-sunLight.shadow.camera.far = 200;
-sunLight.shadow.camera.left = -100;
-sunLight.shadow.camera.right = 100;
-sunLight.shadow.camera.top = 100;
-sunLight.shadow.camera.bottom = -100;
+sunLight.shadow.camera.far = 400;
+sunLight.shadow.camera.left = -260;
+sunLight.shadow.camera.right = 260;
+sunLight.shadow.camera.top = 260;
+sunLight.shadow.camera.bottom = -260;
 sunLight.shadow.bias = -0.0005;
 scene.add(sunLight);
 
@@ -105,7 +104,7 @@ const ground = new THREE.Mesh(
   groundMaterial
 );
 ground.rotation.x = -Math.PI / 2;
-ground.position.y = -3;
+ground.position.y = -0.5;
 ground.receiveShadow = true;
 scene.add(ground);
 
@@ -149,7 +148,7 @@ loader.load(
 );
 
 // ======================= FLOCK SETUP ===========================
-const NUM_BIRDS = 200;
+const NUM_BIRDS = 300;
 const flock = new THREE.Group();
 scene.add(flock);
 const birds = [];

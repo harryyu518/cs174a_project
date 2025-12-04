@@ -104,7 +104,7 @@ export function setupCameraInput(controls, camera) {
       case '1':
         cameraMode = 'free';
         controls.enabled = true;
-        camera.position.set(0, 2.5, 8);
+        camera.position.set(40, 40, 40);
         controls.target.set(0, 0, 0);
         controls.update();
         console.log('Mode: FREE CAMERA');
@@ -185,7 +185,7 @@ export function updateCameraForMode(camera, birds, flock) {
 
     const desiredPos = new THREE.Vector3(
       center.x,
-      center.y + 80,
+      center.y + 100,
       center.z + 80
     );
 
